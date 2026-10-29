@@ -20,17 +20,18 @@ export function registerGrowthRoutes(app:FastifyInstance,world:World) {
   app.post('/api/v1/tank/feed',async request=>({data:await ecosystem.feed(auth(request),key(request),feedSchema.parse(request.body)),requestId:request.id}));
   app.get('/api/v1/leaderboards',async request=>{
     const userId=auth(request);
-    const query=z.object({kind:z.enum(['current','growth','guild']).default('current'),scope:z.enum(['members','guests']).default('members'),limit:z.coerce.number().int().min(1).max(100).default(20),cursor:z.string().optional()}).parse(request.query);
+    const query=z.object({kind:z.enum(['current','growth','guild']).default('current'),scope:z.enum(['members','guests']).default('members'),seasonId:z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),limit:z.coerce.number().int().min(1).max(100).default(20),cursor:z.string().optional()}).parse(request.query);
     const offset=query.cursor?Math.max(0,Number(query.cursor)||0):0;
     if(query.kind==='guild'){
+      const selectedSeason=query.seasonId??seasonKey();
       const result=await pool.query(`SELECT g.id,g.name,g.badge,g.color,COALESCE(s.points,0) AS points,COALESCE(s.wins,0) AS wins,
         COALESCE(s.draws,0) AS draws,COALESCE(s.losses,0) AS losses FROM guilds g LEFT JOIN guild_season_stats s ON s.guild_id=g.id AND s.season_id=$1
         WHERE g.status='ACTIVE' ORDER BY COALESCE(s.points,0) DESC,COALESCE(s.wins,0) DESC,
-        CASE WHEN COALESCE(s.wins+s.draws+s.losses,0)=0 THEN 0 ELSE s.wins::float/(s.wins+s.draws+s.losses) END DESC,g.id`,[seasonKey()]);
+        CASE WHEN COALESCE(s.wins+s.draws+s.losses,0)=0 THEN 0 ELSE s.wins::float/(s.wins+s.draws+s.losses) END DESC,g.id`,[selectedSeason]);
       const membership=await pool.query('SELECT guild_id FROM guild_members WHERE user_id=$1',[userId]);
       const ranked=result.rows.map((row,index)=>({...row,guildId:row.id,rank:index+1}));
       const myIndex=ranked.findIndex(row=>row.id===membership.rows[0]?.guild_id);
-      return {data:{entries:ranked.slice(offset,offset+query.limit),myRank:myIndex>=0?myIndex+1:null,nearby:myIndex>=0?ranked.slice(Math.max(0,myIndex-2),myIndex+3):[],seasonId:seasonKey(),nextCursor:offset+query.limit<ranked.length?String(offset+query.limit):null},requestId:request.id};
+      return {data:{entries:ranked.slice(offset,offset+query.limit),myRank:myIndex>=0?myIndex+1:null,nearby:myIndex>=0?ranked.slice(Math.max(0,myIndex-2),myIndex+3):[],seasonId:selectedSeason,nextCursor:offset+query.limit<ranked.length?String(offset+query.limit):null},requestId:request.id};
     }
     const roleCondition=query.scope==='guests'?"u.role='GUEST'":"u.role IN ('MEMBER','ADMIN')";
     const value=query.kind==='growth'?"COALESCE((SELECT sum(r.xp_delta)::int FROM reward_events r WHERE r.fish_id=f.id AND r.business_date>=$1::date),0)":"w.balance";

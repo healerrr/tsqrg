@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { Fish, Waves, ShoppingBag, Users, Trophy, Utensils, X, ChevronRight, Settings2, Volume2, VolumeX, Zap, Shield, Crown, MousePointer2, Keyboard, ArrowUpRight, Sparkles, Check, Palette, Info } from 'lucide-vue-next';
 import { createAquarium } from './game/aquarium';
-import type { Appearance, PresetId } from '@aquarium/protocol';
+import type { Appearance, FishSnapshot, PresetId } from '@aquarium/protocol';
 import { config, xpForLevel, xpToNext } from '@aquarium/core';
 import { api } from './api';
 import { useSession } from './stores/session';
@@ -27,14 +27,15 @@ const selfName=computed(()=>session.me?.nickname||'我的摸鱼搭子');
 const selfLevel=computed(()=>session.me?.level??1);
 const selfXpPercent=computed(()=>!session.me?0:session.me.level>=config.fish.maxLevel?100:Math.max(0,(session.me.totalXp-xpForLevel(session.me.level))/xpToNext(session.me.level)*100));
 const battleSnapshot=computed(()=>session.snapshot?.sceneKind!=='TANK'?session.snapshot:null);
-const ownBattleFish=computed(()=>battleSnapshot.value?.fish.find(f=>f.id===session.me?.fishId)??null);
-const rivalBattleFish=computed(()=>battleSnapshot.value?.fish.find(f=>f.team!==ownBattleFish.value?.team)??null);
+const teamAFish=computed(()=>battleSnapshot.value?.fish.filter(f=>f.team==='A')??[]);
+const teamBFish=computed(()=>battleSnapshot.value?.fish.filter(f=>f.team==='B')??[]);
 const battleSeconds=computed(()=>Math.max(0,Math.ceil(((battleSnapshot.value?.match?.deadlineAtServerMs??0)-(battleSnapshot.value?.serverTimeMs??0))/1000)));
 const dashCooldown=computed(()=>Math.max(0,Math.ceil(((battleSnapshot.value?.ownRuntime?.dashReadyAtServerMs??0)-(battleSnapshot.value?.serverTimeMs??0))/100)/10));
 const shieldCooldown=computed(()=>Math.max(0,Math.ceil(((battleSnapshot.value?.ownRuntime?.shieldReadyAtServerMs??0)-(battleSnapshot.value?.serverTimeMs??0))/100)/10));
 const reconnectingFish=computed(()=>battleSnapshot.value?.fish.filter(f=>(f.disconnectDeadlineAtServerMs??0)>(battleSnapshot.value?.serverTimeMs??0))??[]);
 const battlePhaseLabels:Record<string,string>={COUNTDOWN:'准备入场',RUNNING:'对战中',OVERTIME:'加时',SETTLING:'结算中',FINISHED:'比赛结束',ABORTED:'系统中止'};
 const battlePhaseLabel=computed(()=>battlePhaseLabels[battleSnapshot.value?.match?.phase??'']??battleSnapshot.value?.match?.phase);
+function battleFishStatus(fish:FishSnapshot){const now=battleSnapshot.value?.serverTimeMs??Date.now();if(fish.withdrawn)return '已退出';if((fish.disconnectDeadlineAtServerMs??0)>now)return `重连 ${Math.ceil(((fish.disconnectDeadlineAtServerMs??0)-now)/1000)}s`;if((fish.respawnAtServerMs??0)>now)return `复活 ${Math.ceil(((fish.respawnAtServerMs??0)-now)/1000)}s`;return `${fish.hp??0}/${fish.maxHp??0}`;}
 const topRanks=shallowRef<{nickname:string;totalPower:number;rank:number}[]>([]),boardError=ref(false);
 let boardTimer:ReturnType<typeof setInterval>|undefined;
 async function refreshBoard(){if(isPreview||session.status!=='online')return;try{const r=await api<{entries:typeof topRanks.value}>('/leaderboards?kind=current&scope=members&limit=3');topRanks.value=r.entries;boardError.value=false;}catch{boardError.value=true;}}
@@ -82,12 +83,12 @@ onBeforeUnmount(()=>{session.stop();sound.destroy();aquarium?.destroy();clearTim
 
     <div class="water-label"><span class="live-dot"></span>{{session.snapshot?.sceneKind==='TEAM'?'3v3 抢珠战':session.snapshot?.sceneKind==='DUEL'?'1v1 个人赛':'六种鱼型 · 自由游动'}}</div>
     <section v-if="battleSnapshot?.match" class="battle-hud glass" aria-label="竞技状态">
-      <div class="battle-side team-a"><span>◆ A队</span><b>{{ownBattleFish?.team==='A'?ownBattleFish?.nickname:rivalBattleFish?.nickname}}</b><strong>{{ownBattleFish?.team==='A'?ownBattleFish?.hp:rivalBattleFish?.hp}} / {{ownBattleFish?.team==='A'?ownBattleFish?.maxHp:rivalBattleFish?.maxHp}}</strong></div>
-      <div class="battle-clock"><small>{{battlePhaseLabel}}</small><b>{{battleSeconds}}</b><span>秒</span><em v-if="battleSnapshot.match.scoreA||battleSnapshot.match.scoreB">{{battleSnapshot.match.scoreA}} : {{battleSnapshot.match.scoreB}}</em><button class="battle-menu" @click="open('arena')">比赛菜单</button></div>
-      <div class="battle-side team-b"><span>● B队</span><b>{{ownBattleFish?.team==='B'?ownBattleFish?.nickname:rivalBattleFish?.nickname}}</b><strong>{{ownBattleFish?.team==='B'?ownBattleFish?.hp:rivalBattleFish?.hp}} / {{ownBattleFish?.team==='B'?ownBattleFish?.maxHp:rivalBattleFish?.maxHp}}</strong></div>
+      <div class="battle-side team-a"><span class="battle-team-label">◆ A队</span><div class="battle-squad"><div v-for="fish in teamAFish" :key="fish.id" :class="{own:fish.id===session.me?.fishId,carrier:battleSnapshot.pearl?.carrierFishId===fish.id,withdrawn:fish.withdrawn}"><b>{{fish.nickname}}</b><strong>{{battleFishStatus(fish)}}</strong></div></div></div>
+      <div class="battle-clock"><small>{{battlePhaseLabel}}</small><b>{{battleSeconds}}</b><span>秒</span><em>{{battleSnapshot.match.scoreA}} : {{battleSnapshot.match.scoreB}}</em><button class="battle-menu" @click="open('arena')">比赛菜单</button></div>
+      <div class="battle-side team-b"><span class="battle-team-label">● B队</span><div class="battle-squad"><div v-for="fish in teamBFish" :key="fish.id" :class="{own:fish.id===session.me?.fishId,carrier:battleSnapshot.pearl?.carrierFishId===fish.id,withdrawn:fish.withdrawn}"><b>{{fish.nickname}}</b><strong>{{battleFishStatus(fish)}}</strong></div></div></div>
     </section>
     <div v-if="battleSnapshot?.match?.phase==='COUNTDOWN'" class="arena-countdown">{{battleSeconds||'开始'}}</div>
-    <div v-for="fish in reconnectingFish" :key="fish.id" class="battle-disconnect glass">{{fish.id===session.me?.fishId?'你':'对手'}}正在重连，剩余 {{Math.max(0,Math.ceil(((fish.disconnectDeadlineAtServerMs??0)-(battleSnapshot?.serverTimeMs??0))/1000))}} 秒</div>
+    <div v-if="reconnectingFish.length" class="battle-disconnect glass">{{reconnectingFish.some(fish=>fish.id===session.me?.fishId)?'你的连接正在恢复':`${reconnectingFish.length} 名参赛者正在重连`}}，倒计时后将退出本局</div>
     <div v-if="!isPreview&&session.status==='online'&&!session.controlled&&session.me?.fishId" class="control-notice glass">当前页面为观察模式 <button @click="session.claimControl().catch(e=>toast(e.message))">接管控制</button></div>
     <div v-if="!isPreview&&session.status==='error'" class="network-error glass" role="alert"><b>暂时无法进入水族箱</b><p>{{session.error}}</p><button class="primary" @click="reloadPage">重新连接</button><a href="/?preview=1">查看本地美术预览</a></div>
     <div v-if="!isPreview&&session.status==='reconnecting'" class="reconnect-banner" role="status">连接中断，正在重新连接。操作已暂停。</div>

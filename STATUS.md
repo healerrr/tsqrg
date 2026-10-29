@@ -93,6 +93,7 @@
 - 服务启动现在先取得唯一模拟实例锁、恢复旧比赛、执行对账再开放 readiness；数据库异常关闭 readiness 与资产写入，周期探测成功后恢复数据库暂停，对账异常必须由管理员复核。提供受 Bearer 令牌保护的 Prometheus `/metrics`、登录态基础性能 JSON、每用户每秒 5 次持久命令限制、outbox 防重入和 35 秒有界比赛排空。
 - 新增/接入 `pnpm ops:backup`、`pnpm ops:restore`、`pnpm ops:monitor`。备份在同数据库会话持有资产写锁，打包 PostgreSQL 17 与数据库引用的上传文件并生成 SHA256 manifest；恢复只创建 `aquarium_restore_*` 全新库和新上传目录，不覆盖现库。Compose 已要求监控令牌并保留单游戏实例。
 - 新增 `tests/e2e/m8.spec.ts` 耐久验收入口：仅在 `M8_SOAK=1` 时运行，两个独立会话先完成真实友谊赛场景往返，随后持续切换五个面板并每五分钟再次切换竞技场，记录 JS 堆、Pixi ticker、实体数和场景；脚本存在不等于 30 分钟已通过。
+- 完整界面补齐：3v3 场内 HUD 同时展示六名参赛者的昵称、生命、复活/重连/退出状态，标记自己与珍珠携带者，开局即显示 `0 : 0`；管理员页接入真实上传列表、下架/恢复、违规昵称处置和审计记录。组织榜接口支持显式 `seasonId=YYYY-MM` 查询历史赛季，同时默认自动切换上海时区当前月。本轮对应 Server/Web 类型检查通过，长 E2E 仍后置。
 - 本轮实际执行 Node 24 的 Server `tsc --noEmit`、Web `vue-tsc --noEmit`、针对性 ESLint 与完整 `pnpm build`，均通过；生产 Web 主包 624.11 kB、gzip 206.17 kB，仍有单 chunk 超过 500 kB 的非阻断警告。`git diff --check` 通过，三个运维命令的 `--help` 入口均实际成功。未运行 M7 长 E2E、30 连接/两场团战负载、30 分钟内存、Docker 空环境或备份恢复演练，以上仍是正式封板缺口。
 - 尝试执行 `node --import tsx tests/integration/m8.ts`，本机 PostgreSQL `127.0.0.1:55432` 当前未启动，连接在创建测试管理员前即 `ECONNREFUSED`，未进入任何 M8 业务断言、也未写入测试数据；此轮不计通过，留待统一启动数据库后验证。
 
