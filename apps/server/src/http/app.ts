@@ -51,7 +51,7 @@ export async function createApp() {
     return unsigned.valid ? unsigned.value! : undefined;
   };
   const mutationBuckets = new Map<string, { second: number; count: number }>();
-  let failedPurchaseCount = 0;
+  let failedPurchaseCount = 0, httpRequestsTotal = 0, httpErrorResponsesTotal = 0;
   app.addHook('onRequest', async request => {
     if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS' && request.headers.origin) {
       assert(origins.includes(request.headers.origin), 'AUTH_REQUIRED', '请求来源不受信任', 403);
@@ -71,6 +71,20 @@ export async function createApp() {
   });
   app.addHook('onSend', async (request, reply) => {
     if (request.url.startsWith('/api/v1/')) reply.header('Cache-Control', 'no-store');
+  });
+  app.addHook('onResponse', async (request, reply) => {
+    if (!request.url.startsWith('/api/v1/') && request.url !== '/metrics') return;
+    httpRequestsTotal++;
+    if (reply.statusCode >= 400) httpErrorResponsesTotal++;
+    const route = request.routeOptions.url ?? request.url.split('?')[0];
+    request.log.info({
+      requestId: request.id,
+      userId: request.userId,
+      matchId: (request.params as { id?: string } | null)?.id,
+      operationSource: `${request.method}:${route}`,
+      statusCode: reply.statusCode,
+      durationMs: Math.round(reply.elapsedTime * 100) / 100,
+    }, 'API 请求完成');
   });
   app.setErrorHandler((error, request, reply) => {
     const validationMessage = error instanceof ZodError && /[\u3400-\u9fff]/.test(error.issues[0]?.message ?? '')
@@ -113,6 +127,8 @@ export async function createApp() {
       tickP95Ms: times[Math.min(times.length - 1, Math.floor(times.length * 0.95))] ?? 0,
       memory: process.memoryUsage(),
       failedPurchaseCount,
+      httpRequestsTotal,
+      httpErrorResponsesTotal,
       socketConnectionsTotal,
       socketDisconnectsTotal,
       database: await databaseMetrics(),
@@ -211,6 +227,10 @@ export async function createApp() {
       `aquarium_process_resident_memory_bytes ${overview.memory.rss}`,
       '# TYPE aquarium_failed_purchases_total counter',
       `aquarium_failed_purchases_total ${overview.failedPurchaseCount}`,
+      '# TYPE aquarium_http_requests_total counter',
+      `aquarium_http_requests_total ${overview.httpRequestsTotal}`,
+      '# TYPE aquarium_http_error_responses_total counter',
+      `aquarium_http_error_responses_total ${overview.httpErrorResponsesTotal}`,
       '# TYPE aquarium_socket_connections_total counter',
       `aquarium_socket_connections_total ${overview.socketConnectionsTotal}`,
       '# TYPE aquarium_socket_disconnects_total counter',

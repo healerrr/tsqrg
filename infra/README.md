@@ -32,7 +32,7 @@ Docker 生产配置未在当前无 Docker 的 Windows 环境执行；不能仅�
 
 ## 健康、日志与发布
 
-日志保留 requestId、userId、matchId、错误码和事务来源，隐藏 Cookie、邀请码明文和密钥。`Authorization: Bearer $OPS_METRICS_TOKEN` 可读取 `/metrics` 的 Prometheus 文本；`pnpm ops:monitor -- --seconds 1800 --interval 5` 可保存趋势报告。至少持续监测 tick P95、连接数、内存、失败购买、冻结总额、待结算比赛年龄、outbox 积压和数据库连接池。公共缸负载烟测为 `pnpm load:smoke`，其报告明确记录尚未覆盖的性能目标。
+日志保留 requestId、userId、matchId、错误码、操作来源、状态码和耗时，隐藏 Cookie、邀请码明文和密钥。`Authorization: Bearer $OPS_METRICS_TOKEN` 可读取 `/metrics` 的 Prometheus 文本；`pnpm ops:monitor -- --seconds 1800 --interval 5` 可保存趋势报告。至少持续监测 HTTP 请求/错误、tick P95、连接数、内存、失败购买、冻结总额、待结算比赛年龄、outbox 积压和数据库连接池。公共缸负载烟测为 `pnpm load:smoke`，其报告明确记录尚未覆盖的性能目标。
 
 发布前备份数据库和上传目录。先停止接新邀请与准备，短比赛有界排空；剩余比赛由服务器系统中止并退款。`stop_grace_period` 设为 45 秒。重启后必须先恢复未完成比赛，已提交的最终结果不再退款。不要直接删除 wallet_holds 或修改余额来清除准备状态。
 
