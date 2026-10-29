@@ -286,7 +286,7 @@ export async function createApp() {
     const recent=await pool.query(`SELECT r.result_json,p.team FROM match_results r JOIN match_participants p ON p.match_id=r.match_id
       WHERE p.user_id=$1 ORDER BY r.created_at DESC,r.match_id DESC LIMIT 5`,[row.user_id]);
     const data:PublicPlayerCard={
-      userId:row.user_id,fishId:row.fish_id,nickname:row.nickname,role:row.role,level,totalPower:basePower(level)+row.balance,
+      userId:row.user_id,fishId:row.fish_id,nickname:row.nickname,role:row.role,online:world.players.get(row.user_id)?.disconnectedAt===null,level,totalPower:basePower(level)+row.balance,
       guild:row.guild_id?{id:row.guild_id,name:row.guild_name,badge:row.guild_badge,color:row.guild_color}:null,
       currentMatchId:row.current_match_id??null,
       recentMatches:recent.rows.map(entry=>{

@@ -60,6 +60,7 @@ export interface PublicPlayerCard {
   fishId: Id;
   nickname: string;
   role: Role;
+  online: boolean;
   level: number;
   totalPower: number;
   guild: { id: Id; name: string; badge: string; color: string } | null;

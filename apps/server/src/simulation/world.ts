@@ -53,6 +53,12 @@ export class World {
     }, config.network.controlLeaseHeartbeatMs);
   }
   stop() { if (this.timer) clearInterval(this.timer); if (this.snapshotTimer) clearInterval(this.snapshotTimer); if (this.heartbeatTimer) clearInterval(this.heartbeatTimer); }
+  private tankRoomFor(guildId: string | null, excludeUserId?: string): string {
+    const guildPeer=[...this.players.entries()].find(([userId,p])=>userId!==excludeUserId&&guildId&&p.self.guildId===guildId&&p.roomId.startsWith('tank:')&&this.roomSize(p.roomId)<config.tank.maxOnlinePlayers)?.[1];
+    let roomId=guildPeer?.roomId??[...this.roomEpochs.keys()].find(id=>id.startsWith('tank:')&&this.roomSize(id)<config.tank.maxOnlinePlayers);
+    if(!roomId){roomId=`tank:${this.roomEpochs.size+1}`;this.roomEpochs.set(roomId,randomUUID());}
+    return roomId;
+  }
   async refreshPlayer(userId: string): Promise<PlayerRuntime | null> {
     const self = await selfView(userId);
     const guildMark = await guildMarkForUser(userId);
@@ -61,14 +67,16 @@ export class World {
     if (old) {
       const previousGuildId = old.self.guildId;
       old.self = self;
+      if(old.disconnectedAt!==null&&old.roomId.startsWith('tank:')&&this.roomSize(old.roomId)>=config.tank.maxOnlinePlayers){
+        old.roomId=this.tankRoomFor(self.guildId,userId);
+        old.fish.position={x:400+Math.random()*1000,y:250+Math.random()*450};old.fish.velocity={x:0,y:0};old.input={kind:'idle'};this.disableFollow(old);
+      }
       // Persisted profile refreshes must not replace the match's locked appearance or level.
       if(old.roomId.startsWith('tank:')) { old.fish.nickname = self.nickname; old.fish.appearance = self.appearance; old.fish.level = self.level; old.fish.displaySize = displaySize(self.level); old.fish.guildId = self.guildId; old.fish.guildMark = guildMark; }
       if (!self.guildId || self.guildId !== previousGuildId) this.disableFollow(old);
       return old;
     }
-    const guildPeer = [...this.players.values()].find(p => self.guildId && p.self.guildId === self.guildId && p.roomId.startsWith('tank:') && this.roomSize(p.roomId) < config.tank.maxOnlinePlayers);
-    let roomId = guildPeer?.roomId ?? [...this.roomEpochs.keys()].find(id => this.roomSize(id) < config.tank.maxOnlinePlayers);
-    if (!roomId) { roomId = `tank:${this.roomEpochs.size+1}`; this.roomEpochs.set(roomId, randomUUID()); }
+    const roomId=this.tankRoomFor(self.guildId,userId);
     const fish: FishSnapshot = { id: self.fishId, nickname: self.nickname, position: { x: 400 + Math.random()*1000, y: 250 + Math.random()*450 }, velocity: { x: 0, y: 0 }, facing: 'right', angle: 0,
       appearance: self.appearance, level: self.level, displaySize: displaySize(self.level), guildId: self.guildId, guildMark, team: null, animation: 'idle', interactive: true, followGroupId: null, followLeaderFishId: null, hp: null, maxHp: null, shieldUntilServerMs: 0, respawnAtServerMs: null };
     const p: PlayerRuntime = { self, fish, roomId, controlSocketId: null, leaseUntil: 0, input: { kind: 'idle' }, lastInputAt: 0, lastActivityAt: 0, pageVisible: true, ackInputSeq: 0, ackActionSeq: 0,
