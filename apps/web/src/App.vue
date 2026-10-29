@@ -41,6 +41,8 @@ let boardTimer:ReturnType<typeof setInterval>|undefined;
 async function refreshBoard(){if(isPreview||session.status!=='online')return;try{const r=await api<{entries:typeof topRanks.value}>('/leaderboards?kind=current&scope=members&limit=3');topRanks.value=r.entries;boardError.value=false;}catch{boardError.value=true;}}
 const dock=[{id:'feed',label:'投喂',icon:Utensils,color:'#ffc06a'},{id:'fish',label:'我的鱼',icon:Fish,color:'#64c7fb'},{id:'shop',label:'商城',icon:ShoppingBag,color:'#ff899c'},{id:'guild',label:'鱼群组织',icon:Users,color:'#bda7f5'},{id:'arena',label:'竞技场',icon:Trophy,color:'#ffd36c'}];
 const currentPreset=computed(()=>presets.find(p=>p.id===appearance.value.presetId)!);
+const locationTitle=computed(()=>session.snapshot?.sceneKind==='TEAM'?'组织竞技场':session.snapshot?.sceneKind==='DUEL'?'个人竞技场':'公共水族箱');
+const locationSubtitle=computed(()=>{if(isPreview)return '01 · 珊瑚海';const scene=session.snapshot;if(!scene)return '连接中';if(scene.sceneKind!=='TANK')return `${scene.sceneKind==='TEAM'?'3v3 抢珠':'1v1 对决'} · ${scene.roomId.slice(0,14)}`;const number=scene.roomId.split(':')[1]??'1';return `${number.padStart(2,'0')} · 珊瑚海`;});
 const items=config.catalog.filter(i=>i.scope==='PERSONAL');
 let toastTimer:ReturnType<typeof setTimeout>;
 function toast(text:string){message.value=text;clearTimeout(toastTimer);toastTimer=setTimeout(()=>message.value='',3500);}
@@ -79,7 +81,7 @@ onBeforeUnmount(()=>{session.stop();sound.destroy();aquarium?.destroy();clearTim
     <div ref="host" class="aquarium-host" aria-label="可操作的公共水族箱"></div>
     <header class="topbar">
       <a class="brand" href="/" aria-label="同事请入缸首页"><span class="brand-fish"><Fish :size="30" stroke-width="2.6" /></span><span>同事<span class="warm">请入</span>缸<small>工作之外，一起摸鱼。</small></span></a>
-      <div class="location"><Waves :size="18"/><span>公共水族箱<small>01 · 珊瑚海</small></span><span class="location-dot"></span></div>
+      <div class="location"><Waves :size="18"/><span>{{locationTitle}}<small>{{locationSubtitle}}</small></span><span class="location-dot"></span></div>
       <div class="top-actions"><span class="preview-badge" :class="{connected:!isPreview&&session.status==='online'}"><span></span>{{isPreview?'本地美术预览':session.status==='online'?`在线 ${session.onlineCount} / ${config.tank.maxOnlinePlayers}`:session.status==='reconnecting'?'正在重连…':'连接中…'}}</span><button class="icon-button" @click="muted=!muted" :aria-label="muted?'开启声音':'静音'"><VolumeX v-if="muted" :size="20"/><Volume2 v-else :size="20"/></button><button class="icon-button" aria-label="设置" @click="open('settings')"><Settings2 :size="20"/></button></div>
     </header>
 

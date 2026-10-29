@@ -59,6 +59,10 @@ export class World {
     if(!roomId){roomId=`tank:${this.roomEpochs.size+1}`;this.roomEpochs.set(roomId,randomUUID());}
     return roomId;
   }
+  tankRoomForReturn(player: PlayerRuntime, preferredRoom: string): string {
+    if(preferredRoom.startsWith('tank:')&&this.roomEpochs.has(preferredRoom)&&this.roomSize(preferredRoom)<config.tank.maxOnlinePlayers)return preferredRoom;
+    return this.tankRoomFor(player.self.guildId,player.self.userId);
+  }
   async refreshPlayer(userId: string): Promise<PlayerRuntime | null> {
     const self = await selfView(userId);
     const guildMark = await guildMarkForUser(userId);
