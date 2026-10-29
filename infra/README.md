@@ -20,7 +20,7 @@ pnpm dev
 
 `infra/compose.yml` 使用 PostgreSQL 17.6、一个持续运行的 Node.js 24.12.0 游戏实例和 Nginx 1.28.0。服务镜像在构建时执行锁文件安装和 Web 构建，启动时执行版本化迁移及商品种子。
 
-1. 在服务器设置 `POSTGRES_PASSWORD`、`SESSION_SECRET` 和 `APP_ORIGIN`。密钥用密码管理器生成；会话密钥至少 32 字节，不使用开发值。数据库密码进入连接 URL，特殊字符须按 URL 规则编码，或使用仅含安全字母、数字和下划线的随机密码。
+1. 在服务器设置 `POSTGRES_PASSWORD`、`SESSION_SECRET`、`OPS_METRICS_TOKEN` 和 `APP_ORIGIN`。密钥用密码管理器生成；会话密钥至少 32 字节、监控令牌至少 24 字节，不使用开发值。数据库密码进入连接 URL，特殊字符须按 URL 规则编码，或使用仅含安全字母、数字和下划线的随机密码。
 2. `APP_ORIGIN` 填最终 HTTPS 同域地址，例如 `https://fish.example.com`，不带尾斜杠。前端不接收数据库或会话密钥。
 3. 执行 `docker compose -f infra/compose.yml build` 和 `docker compose -f infra/compose.yml up -d`。
 4. 在宿主机 TLS 反向代理或公司网关将该域名转发到 `127.0.0.1:8080`，保留 Host、Origin 和 WebSocket Upgrade。生产 HttpOnly Cookie 使用 Secure，必须经 HTTPS 访问。内置 Nginx 只监听容器 HTTP，并将宿主端口限制在回环。
@@ -32,21 +32,28 @@ Docker 生产配置未在当前无 Docker 的 Windows 环境执行；不能仅�
 
 ## 健康、日志与发布
 
-日志保留 requestId、userId、matchId、错误码和事务来源，隐藏 Cookie、邀请码明文和密钥。至少持续监测 tick P95、连接数、内存、失败购买、冻结总额、待结算比赛年龄、outbox 积压和数据库连接池。公共缸负载烟测为 `pnpm load:smoke`，其报告明确记录尚未覆盖的性能目标。
+日志保留 requestId、userId、matchId、错误码和事务来源，隐藏 Cookie、邀请码明文和密钥。`Authorization: Bearer $OPS_METRICS_TOKEN` 可读取 `/metrics` 的 Prometheus 文本；`pnpm ops:monitor -- --seconds 1800 --interval 5` 可保存趋势报告。至少持续监测 tick P95、连接数、内存、失败购买、冻结总额、待结算比赛年龄、outbox 积压和数据库连接池。公共缸负载烟测为 `pnpm load:smoke`，其报告明确记录尚未覆盖的性能目标。
 
 发布前备份数据库和上传目录。先停止接新邀请与准备，短比赛有界排空；剩余比赛由服务器系统中止并退款。`stop_grace_period` 设为 45 秒。重启后必须先恢复未完成比赛，已提交的最终结果不再退款。不要直接删除 wallet_holds 或修改余额来清除准备状态。
 
 ## 备份与恢复演练
 
-数据库和上传文件必须作为一套备份保存，至少每日一次、保留最近七份，并在发布前另存一份。下面命令仅针对命名的游戏服务和数据库，路径由操作者明确填写：
+数据库和上传文件必须作为一套备份保存，至少每日一次、保留最近七份，并在发布前另存一份。推荐从能访问数据库和上传目录的 Node.js 24 运维主机执行：
 
-```text
-docker compose -f infra/compose.yml exec -T db pg_dump -U aquarium -d aquarium -Fc -f /tmp/aquarium.dump
-docker compose -f infra/compose.yml cp db:/tmp/aquarium.dump ./backup/aquarium.dump
-docker compose -f infra/compose.yml cp game:/data/uploads ./backup/uploads
+```powershell
+$env:DATABASE_URL='postgresql://aquarium:...@127.0.0.1:5432/aquarium'
+$env:UPLOAD_DIR='D:\aquarium\uploads'
+pnpm ops:backup -- --out 'D:\aquarium\backups'
 ```
 
-为确保数据库与图片关联一致，制作最终发布备份期间暂停资产写入。恢复演练应在独立环境进行：创建空 PostgreSQL 17 数据库，用 `pg_restore --no-owner --clean --if-exists` 恢复指定备份，复制同一批上传目录，使用新环境的密钥启动服务，等待 readiness，再核对鱼、库存、上传归属、钱包余额、冻结合计、流水零和及比赛唯一结果。恢复命令包含清理选项，只能对已确认的独立恢复数据库执行，不能直接指向生产。
+备份脚本在同一数据库会话持有资产写 advisory lock，执行 PostgreSQL 17 自定义格式备份、复制数据库引用的上传文件并生成 SHA256 manifest；不会自动删除旧备份。恢复脚本只允许创建名为 `aquarium_restore_*` 的全新数据库和全新上传目录，不执行 DROP 或覆盖：
+
+```powershell
+$env:RESTORE_ADMIN_URL='postgresql://postgres:...@127.0.0.1:5432/postgres'
+pnpm ops:restore -- --backup 'D:\aquarium\backups\aquarium-...' --database aquarium_restore_drill_01 --uploads 'D:\aquarium\restore-uploads-01'
+```
+
+恢复完成后脚本会重新核对行数、钱包/上传指纹和基础账目不变量，并写出恢复报告。随后使用新环境密钥启动该隔离实例、等待 readiness，并进行人工抽查；绝不能把恢复目标指向生产现库。
 
 本文件提供演练步骤；没有实际执行演练的记录前，OPS05 状态为未执行。
 

@@ -96,6 +96,8 @@ export interface FishSnapshot {
   maxHp: number | null;
   shieldUntilServerMs: number;
   respawnAtServerMs: number | null;
+  spawnProtectionUntilServerMs?: number;
+  withdrawn?: boolean;
   disconnectDeadlineAtServerMs?: number | null;
 }
 export interface FoodSnapshot { id: Id; position: Vec2; state: 'AVAILABLE' | 'CLAIM_PENDING'; expiresAtServerMs: number }

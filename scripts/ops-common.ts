@@ -12,6 +12,7 @@ export function options() {
   const args = process.argv.slice(2), result: Record<string, string> = {};
   for (let index = 0; index < args.length; index++) {
     const argument = args[index]!;
+    if (argument === '--') continue;
     if (argument === '--help' || argument === '-h') result.help = '1';
     else {
       if (!argument.startsWith('--') || !args[index + 1] || args[index + 1]!.startsWith('--')) throw new Error(`参数 ${argument} 需要一个值`);

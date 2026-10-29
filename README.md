@@ -26,9 +26,26 @@ pnpm dev
 
 `pnpm typecheck`、`pnpm lint`、`pnpm test`、`pnpm build`、`pnpm test:e2e`。真实数据库脚本在 `tests/integration/`；截图与追踪在 `artifacts/`。浏览器默认Edge和Chrome。`lint`检查TS/JS，Vue组件由vue-tsc检查。未执行的项目在STATUS明确标注。
 
+30连接混合负载使用显式测试开关，脚本会建立12个测试同事、4个测试鱼群和两场3v3友谊赛，不得指向生产数据库：
+
+```powershell
+$env:LOAD_ALLOW_TEST_FIXTURES='1'
+$env:LOAD_CLIENTS='30'
+$env:LOAD_SECONDS='1800'
+pnpm load:smoke
+```
+
+浏览器 30 分钟场景/面板耐久脚本默认跳过，显式启用后用两个独立浏览器 context 周期进入友谊赛、返回主缸并切换面板，同时记录 JS 堆、ticker 和实体数：
+
+```powershell
+$env:M8_SOAK='1'
+$env:M8_SOAK_SECONDS='1800'
+pnpm exec playwright test -c tests/e2e/playwright.config.ts tests/e2e/m8.spec.ts
+```
+
 不内置管理员口令。运维人员对已有用户运行 `pnpm --filter @aquarium/server exec tsx src/admin.ts promote 用户UUID`；生成单次邀请码使用 `pnpm --filter @aquarium/server exec tsx src/admin.ts invite 员工唯一标识`，明文只在生成时返回。不要把邀请码、Cookie和密钥写入源码或报告。
 
-生产环境变量见 `.env.example`；同域Nginx、单游戏实例、PostgreSQL持久卷及备份说明见 `infra/README.md`。当前机器无Docker，生产Compose是否实际复现必须查STATUS，配置存在不能替代部署验收。
+生产环境变量见 `.env.example`；同域Nginx、单游戏实例、PostgreSQL持久卷及备份说明见 `infra/README.md`。运维脚本为 `pnpm ops:backup -- --out <绝对目录>`、`pnpm ops:restore -- --backup ...` 与 `pnpm ops:monitor`。当前机器无Docker，生产Compose是否实际复现必须查STATUS，配置存在不能替代部署验收。
 
 ## 推荐使用方式
 
@@ -48,7 +65,7 @@ pnpm dev
 | contracts/protocol.v1.ts | 实时协议、状态、消息、错误码与共享类型起点 |
 | ACCEPTANCE.md | 身份、美术、生态、资产、个人赛、团战和运行验收清单 |
 | ASSET_LIST.md | 色块卡通角色、场景、配饰、manifest与接入要求 |
-| STATUS.md | 明确标为未开始的开发进度模板 |
+| STATUS.md | 各阶段真实实现、验证证据与未完成项 |
 | assets/reference/approved-color-block.png | 用户选定的色块卡通主界面参考原图 |
 
 ## 规范优先级

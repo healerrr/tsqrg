@@ -21,7 +21,10 @@
     "db:local": "tsx infra/dev-db.ts",
     "db:migrate": "pnpm --filter @aquarium/server db:migrate",
     "db:seed": "pnpm --filter @aquarium/server db:seed",
-    "load:smoke": "tsx tests/load.ts"
+    "load:smoke": "tsx tests/load.ts",
+    "ops:backup": "tsx scripts/backup.ts",
+    "ops:restore": "tsx scripts/restore.ts",
+    "ops:monitor": "tsx scripts/monitor.ts"
   },
   "devDependencies": {
     "@eslint/js": "9.39.1",

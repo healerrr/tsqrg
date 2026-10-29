@@ -1,6 +1,6 @@
 import { AppError } from '../http/errors';
 
-type PauseSource = 'database' | 'integrity';
+type PauseSource = 'database' | 'integrity' | 'maintenance';
 const pauses = new Map<PauseSource, { message: string; since: string }>();
 
 /** A failed reconciliation never changes balances; it closes asset admission instead. */

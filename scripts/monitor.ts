@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { options } from './ops-common';
 
 const args = options();
-if (args.help) console.log('用法：AQUARIUM_API_URL=http://127.0.0.1:3000 OPS_SESSION_COOKIE=<管理员HttpOnly会话> node --import tsx scripts/monitor.ts --seconds 60 --interval 5 --out <报告父目录>\n只读。缺少管理员会话时仍检查live/ready，私有指标标为未采集；设置 --seconds 1800 可采集30分钟趋势。');
+if (args.help) console.log('用法：AQUARIUM_API_URL=http://127.0.0.1:3000 OPS_METRICS_TOKEN=<监控令牌> pnpm ops:monitor -- --seconds 60 --interval 5 --out <报告父目录>\n也可使用 OPS_SESSION_COOKIE=<管理员HttpOnly会话> 读取管理总览。只读；缺少凭据时仍检查 live/ready，私有指标标为未采集；设置 --seconds 1800 可采集30分钟趋势。');
 else {
   const base = new URL(process.env.AQUARIUM_API_URL ?? 'http://127.0.0.1:3000');
   const seconds = Number(args.seconds ?? 60), interval = Number(args.interval ?? 5), output = resolve(args.out ?? 'artifacts/monitor');
@@ -13,14 +13,19 @@ else {
   if (process.env.OPS_METRICS_TOKEN) headers.Authorization = `Bearer ${process.env.OPS_METRICS_TOKEN}`;
   const samples: unknown[] = []; let stopped = false;
   process.once('SIGINT', () => { stopped = true; }); process.once('SIGTERM', () => { stopped = true; });
-  async function read(path: string, authenticated = false) {
+  async function read(path: string, authenticated = false, text = false) {
     const began = performance.now();
-    try { const response = await fetch(new URL(path, base), { headers: authenticated ? headers : {}, signal: AbortSignal.timeout(8000) }); const body = await response.json() as any; return { status: response.status, durationMs: Math.round(performance.now() - began), ok: response.ok, data: response.ok ? body.data ?? body : null }; }
+    try { const response = await fetch(new URL(path, base), { headers: authenticated ? headers : {}, signal: AbortSignal.timeout(8000) }); const body = text ? await response.text() : await response.json() as any; return { status: response.status, durationMs: Math.round(performance.now() - began), ok: response.ok, data: response.ok ? text ? body : body.data ?? body : null }; }
     catch (error) { return { status: null, durationMs: Math.round(performance.now() - began), ok: false, data: null, error: (error as Error).message }; }
   }
   const startedAt = Date.now();
   while (!stopped && Date.now() - startedAt < seconds * 1000) {
-    const [live, ready, metrics] = await Promise.all([read('/api/v1/health/live'), read('/api/v1/health/ready'), read('/api/v1/metrics', true)]);
+    const metricsRequest = process.env.OPS_METRICS_TOKEN
+      ? read('/metrics', true, true)
+      : process.env.OPS_SESSION_COOKIE
+        ? read('/api/v1/admin/operations', true)
+        : Promise.resolve({ status: null, durationMs: 0, ok: false, data: null, error: '未提供 OPS_METRICS_TOKEN 或 OPS_SESSION_COOKIE' });
+    const [live, ready, metrics] = await Promise.all([read('/api/v1/health/live'), read('/api/v1/health/ready'), metricsRequest]);
     samples.push({ at: new Date().toISOString(), live, ready, metrics });
     console.log(JSON.stringify({ at: new Date().toISOString(), live: live.ok, ready: ready.ok, metrics: metrics.ok ? 'collected' : 'unavailable' }));
     const deadline = Date.now() + interval * 1000;

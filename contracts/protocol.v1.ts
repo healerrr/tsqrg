@@ -96,6 +96,10 @@ export interface FishSnapshot {
   maxHp: number | null;
   shieldUntilServerMs: number;
   respawnAtServerMs: number | null;
+  /** 团战复活后的出生保护截止时间。 */
+  spawnProtectionUntilServerMs?: number;
+  /** 团战中已主动退出或断线超时；实体仅保留为结算可见状态。 */
+  withdrawn?: boolean;
   /** 竞技断线宽限截止；仅在断线等待期间存在。 */
   disconnectDeadlineAtServerMs?: number | null;
 }

@@ -12,9 +12,11 @@ interface GuildMember { userId:string;nickname:string;role:string;online:boolean
 interface Guild { id:string;name:string;members:GuildMember[] }
 interface Player { userId:string;nickname:string;role:string;totalPower:number;currentMatchId:string|null }
 interface GuildOption { id:string;name:string;member_count?:number }
+interface GuildRank { guildId:string;name:string;points:number;wins:number;draws:number;losses:number;rank:number }
 const emit=defineEmits<{close:[];toast:[string]}>();
 const session=useSession();
-const match=shallowRef<Match|null>(null),history=shallowRef<MatchResultView[]>([]),players=shallowRef<Player[]>([]),guild=shallowRef<Guild|null>(null),guilds=shallowRef<GuildOption[]>([]),guildMatches=shallowRef<Match[]>([]);
+const match=shallowRef<Match|null>(null),history=shallowRef<MatchResultView[]>([]),players=shallowRef<Player[]>([]),guild=shallowRef<Guild|null>(null),guilds=shallowRef<GuildOption[]>([]),guildMatches=shallowRef<Match[]>([]),guildRanks=shallowRef<GuildRank[]>([]);
+const seasonId=ref(''),myGuildRank=ref<number|null>(null);
 const busy=ref(false),loading=ref(true),error=ref(''),formal=ref(false),mode=ref<'solo'|'team'>('solo'),roster=ref<string[]>([]),targetGuild=ref(''),cancelConfirm=ref(false),showLatest=ref(true);
 const now=ref(Date.now());let clock:ReturnType<typeof setInterval>|undefined,poll:ReturnType<typeof setInterval>|undefined,reading=false,disposed=false;
 const phaseLabels:Record<MatchPhase,string>={INVITED:'等待接受邀请',READY_CHECK:'各自确认押注',COUNTDOWN:'倒计时入场',RUNNING:'对战进行中',OVERTIME:'加时抢珠',SETTLING:'战力结算中',FINISHED:'比赛已完成',ABORTED:'系统中止，冻结已释放'};
@@ -36,8 +38,8 @@ function signed(value:number){return `${value>0?'+':''}${value}`;}
 async function load(silent=false){
   if(reading||disposed)return;reading=true;if(!silent)loading.value=true;
   try{
-    const [tank,results]=await Promise.all([api<Player[]>('/players'),api<MatchResultView[]>('/matches/history')]);
-    players.value=items(tank);history.value=items(results);
+    const [tank,results,ranking]=await Promise.all([api<Player[]>('/players'),api<MatchResultView[]>('/matches/history'),api<{entries:GuildRank[];seasonId:string;myRank:number|null}>('/leaderboards?kind=guild&limit=8')]);
+    players.value=items(tank);history.value=items(results);guildRanks.value=items(ranking);seasonId.value=ranking.seasonId;myGuildRank.value=ranking.myRank;
     if(session.me?.guildId){const [ownGuild,allGuilds]=await Promise.all([api<Guild>(`/guilds/${session.me.guildId}`),api<{items:GuildOption[]}>('/guilds?limit=100')]);guild.value=ownGuild;guilds.value=items(allGuilds);}
     else {guild.value=null;guilds.value=[];}
     const id=session.me?.currentMatchId??match.value?.id??(showLatest.value?session.lastMatchId:null);
@@ -90,5 +92,6 @@ onBeforeUnmount(()=>{disposed=true;if(poll)clearInterval(poll);if(clock)clearInt
     <div v-else-if="mode==='team'" class="empty-panel"><Users :size="40"/><p>加入一个鱼群，与三名搭子一起抢珠。</p></div>
   </template>
   <section v-if="guildMatches.length" class="bind-section"><h3 class="section-title">鱼群正在进行的比赛</h3><div v-for="g in guildMatches" :key="g.id" class="list-row"><div><b>{{guildName(g.guildA!)}} vs {{guildName(g.guildB!)}}</b><small>{{phaseLabels[g.phase]}}</small></div><button @click="viewHistory(g.id)" :disabled="busy">查看 / 观战</button></div></section>
+  <details class="bind-section"><summary>组织赛季榜 · {{seasonId}}<span v-if="myGuildRank"> · 本群第 {{myGuildRank}} 名</span></summary><div v-for="entry in guildRanks" :key="entry.guildId" class="settlement-row"><span>{{entry.rank}}. {{entry.name}}<small> {{entry.wins}}胜 {{entry.draws}}平 {{entry.losses}}负</small></span><b>{{entry.points}} 分</b></div><p v-if="!guildRanks.length" class="tiny-label">本赛季还没有组织赛成绩。</p></details>
   <details class="bind-section"><summary>真实历史战绩 · {{history.length}}</summary><div v-for="h in history" :key="h.matchId" class="list-row"><div><b>{{h.mode.startsWith('TEAM_')?'3v3 团战':'个人 PK'}} · {{reasonLabels[h.reason]}}</b><small>{{new Date(h.committedAt).toLocaleString('zh-CN')}} · 押注 {{h.stake}}</small></div><button @click="viewHistory(h.matchId)" :disabled="busy">查看结果</button></div><p v-if="!history.length" class="tiny-label">还没有战绩，第一场故事从这里开始。</p></details>
 </template>

@@ -80,6 +80,7 @@ export const fishSnapshotSchema = z.object({
   followLeaderFishId: idSchema.nullable().optional(),
   guildMark: z.object({ id: idSchema, name: guildNameSchema, badge: z.string().max(12), color: colorSchema, bannerItemId: idSchema.nullable(), trailItemId: idSchema.nullable() }).strict().nullable().optional(),
   maxHp: safeIntSchema.nullable(), shieldUntilServerMs: safeIntSchema, respawnAtServerMs: safeIntSchema.nullable(),
+  spawnProtectionUntilServerMs: safeIntSchema.optional(), withdrawn: z.boolean().optional(),
   disconnectDeadlineAtServerMs: safeIntSchema.nullable().optional(),
 }).strict();
 export const sceneSnapshotSchema = z.object({

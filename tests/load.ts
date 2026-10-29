@@ -11,8 +11,11 @@ const webOrigin = process.env.AQUARIUM_WEB_URL ?? 'http://127.0.0.1:5173';
 const clientCount = Number(process.env.LOAD_CLIENTS ?? 30);
 const seconds = Number(process.env.LOAD_SECONDS ?? 15);
 if (!Number.isInteger(clientCount) || clientCount < 1 || clientCount > 100 || !Number.isFinite(seconds) || seconds < 3 || seconds > 1800) throw new Error('LOAD_CLIENTS范围1至100，LOAD_SECONDS范围3至1800');
+const teamFixture = process.env.LOAD_ALLOW_TEST_FIXTURES === '1';
+if (teamFixture && (clientCount < 30 || seconds < 8)) throw new Error('两场团战混合负载要求 LOAD_CLIENTS>=30、LOAD_SECONDS>=8');
 const sockets: any[] = [];
 const timers: ReturnType<typeof setInterval>[] = [];
+let fixturePool: { end(): Promise<void> } | null = null;
 const percentile = (values: number[], p: number): number | null => values.length ? [...values].sort((a, b) => a - b)[Math.min(values.length - 1, Math.floor(values.length * p))] : null;
 const metrics = async () => {
   const response = await fetch(`${apiUrl}/api/v1/health/ready`);
@@ -65,24 +68,49 @@ async function makeGuest(index: number) {
     if (!response.ok) throw new Error(`无法读取服务端性能指标 HTTP ${response.status}`);
     return response.json();
   };
-  return { userId: me.userId, fishId: me.fishId, serverMetrics, start: () => { collecting = true; }, result: () => ({ snapshots, bytes, kibPerSecond: bytes / 1024 / seconds, snapshotGapP95Ms: percentile(gaps, 0.95), lastRoom: snapshot?.roomId, sawFish: snapshot?.fish.length ?? 0 }) };
+  return { userId: me.userId, fishId: me.fishId, post, serverMetrics, start: () => { collecting = true; }, result: () => ({ snapshots, bytes, kibPerSecond: bytes / 1024 / seconds, snapshotGapP95Ms: percentile(gaps, 0.95), lastRoom: snapshot?.roomId, sceneKind: snapshot?.sceneKind, sawFish: snapshot?.fish.length ?? 0 }) };
+}
+async function startTwoTeamMatches(clients: Awaited<ReturnType<typeof makeGuest>>[]) {
+  const database = await import('../apps/server/src/persistence/db');
+  fixturePool = database.pool;
+  const guilds = Array.from({ length: 4 }, () => randomUUID());
+  await database.tx(async client => {
+    for (let group = 0; group < 4; group++) {
+      const users = clients.slice(group * 3, group * 3 + 3).map(entry => entry.userId);
+      for (const userId of users) await client.query("UPDATE users SET role='MEMBER',employee_ref=$2 WHERE id=$1", [userId, `load-${randomUUID()}`]);
+      await client.query('INSERT INTO guilds(id,name,leader_user_id,badge,color,notice) VALUES ($1,$2,$3,$4,$5,$6)', [guilds[group], `压测${String.fromCharCode(65 + group)}${randomUUID().slice(0, 3)}`, users[0], String.fromCharCode(65 + group), ['#21BDE7', '#FF7B88', '#8C79D8', '#52B788'][group], '仅用于显式负载测试']);
+      await client.query("INSERT INTO wallets(id,owner_kind,owner_guild_id) VALUES ($1,'GUILD',$2)", [`guild:${guilds[group]}`, guilds[group]]);
+      for (let index = 0; index < users.length; index++) await client.query("INSERT INTO guild_members(user_id,guild_id,role) VALUES ($1,$2,$3)", [users[index], guilds[group], index === 0 ? 'LEADER' : 'MEMBER']);
+    }
+  });
+  const matchIds: string[] = [];
+  for (const [left, right] of [[0, 1], [2, 3]] as const) {
+    const leftClients = clients.slice(left * 3, left * 3 + 3), rightClients = clients.slice(right * 3, right * 3 + 3);
+    const invited: any = await leftClients[0]!.post('/matches/invitations', { mode: 'TEAM_FRIENDLY', targetGuildId: guilds[right], roster: leftClients.map(entry => entry.userId) });
+    const accepted: any = await rightClients[0]!.post(`/matches/${invited.id}/accept`, { version: invited.version, roster: rightClients.map(entry => entry.userId) });
+    for (const participant of [...leftClients, ...rightClients]) await participant.post(`/matches/${invited.id}/ready`, { quoteVersion: accepted.quoteVersion, stake: accepted.stake });
+    matchIds.push(invited.id);
+  }
+  return matchIds;
 }
 try {
   const before = await metrics();
   console.log(`创建 ${clientCount} 个独立游客和真实 Socket.IO 连接…`);
   const clients = await Promise.all(Array.from({ length: clientCount }, (_, i) => makeGuest(i)));
+  const teamMatchIds = teamFixture ? await startTwoTeamMatches(clients) : [];
   const serverBefore = await clients[0].serverMetrics();
   clients.forEach(c => c.start());
-  console.log(`已联机，采集 ${seconds} 秒公共主缸负载。`);
+  console.log(`已联机，采集 ${seconds} 秒${teamFixture ? '公共主缸与两场3v3' : '公共主缸'}负载。`);
   await new Promise(resolve => setTimeout(resolve, seconds * 1000));
   const after = await metrics();
   const serverAfter = await clients[0].serverMetrics();
   const results = clients.map(c => ({ userId: c.userId, ...c.result() }));
   if (results.some(r => r.snapshots === 0)) throw new Error('部分真实连接没有收到完整快照');
-  const report = { recordedAt: new Date().toISOString(), node: process.version, scene: 'public-tank-only', clients: clientCount, durationSeconds: seconds, before, after, serverBefore, serverAfter, maxKibPerSecond: Math.max(...results.map(r => r.kibPerSecond)), p95SnapshotGapMs: percentile(results.map(r => r.snapshotGapP95Ms ?? 0), 0.95), results, rendererFps: null, limitations: ['本脚本当前仅测公共缸；未同时运行两场团战，不代表OPS01完整通过。', 'snapshotGap为网络到达间隔，不是服务端tick执行耗时；tickP95Ms来自独立服务端metrics字段。', '未采集浏览器FPS和30分钟内存趋势。'] };
+  if (teamFixture && results.filter(result => result.sceneKind === 'TEAM').length < 12) throw new Error('两场团战没有让12个独立连接全部进入TEAM快照');
+  const report = { recordedAt: new Date().toISOString(), node: process.version, scene: teamFixture ? 'public-tank-plus-two-team-matches' : 'public-tank-only', clients: clientCount, durationSeconds: seconds, fixtureMode: teamFixture, teamMatchIds, before, after, serverBefore, serverAfter, maxKibPerSecond: Math.max(...results.map(r => r.kibPerSecond)), p95SnapshotGapMs: percentile(results.map(r => r.snapshotGapP95Ms ?? 0), 0.95), results, rendererFps: null, limitations: [...(!teamFixture ? ['未设置 LOAD_ALLOW_TEST_FIXTURES=1，本轮未运行两场团战，不代表OPS01完整通过。'] : []), 'snapshotGap为网络到达间隔，不是服务端tick执行耗时；tickP95Ms来自独立服务端metrics字段。', '脚本不采集浏览器渲染FPS；30分钟内存趋势需配合ops:monitor和浏览器性能记录。'] };
   await mkdir('artifacts/load', { recursive: true });
   const path = `artifacts/load/tank-${Date.now()}.json`;
   await writeFile(path, JSON.stringify(report, null, 2));
   console.log(`公共缸负载完成，报告 ${path}`);
-} finally { timers.forEach(clearInterval); sockets.forEach(s => s.disconnect()); }
+} finally { timers.forEach(clearInterval); sockets.forEach(s => s.disconnect()); if (fixturePool) await fixturePool.end(); }
 

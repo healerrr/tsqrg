@@ -22,6 +22,8 @@ export const useSession=defineStore('session',()=>{
   function scheduleRefresh(){if(refreshTimer)return;refreshTimer=setTimeout(()=>{refreshTimer=undefined;refresh().catch(e=>{error.value=e.message;});},150);}
   function ack<T>(event:string,payload:unknown):Promise<T>{return new Promise((resolve,reject)=>{if(!socket?.connected)return reject(new Error('服务器尚未连接'));socket.timeout(5000).emit(event,payload,(timeout:Error|null,result:ApiResult<T>)=>{if(timeout)return reject(new Error('服务器响应超时，请重试'));if('error'in result)return reject(new Error(result.error.message));resolve(result.data);});});}
   async function joinTank(){const result=await ack<{roomId:string;sceneEpoch:string}>('scene:join',{sceneKind:'TANK'});sceneEpoch.value=result.sceneEpoch;lastMatchId.value=null;clearInput();}
+  async function watchMatch(matchId:string){const result=await ack<{roomId:string;sceneEpoch:string}>('scene:join',{sceneKind:'TEAM',watchMatchId:matchId});sceneEpoch.value=result.sceneEpoch;lastMatchId.value=matchId;controlled.value=false;clearInput();}
+  function forgetMatch(){lastMatchId.value=null;}
   async function claimControl(){const result=await ack<{sceneEpoch:string;controlledFishId:string|null}>('control:claim',{clientInstanceId:instanceId});sceneEpoch.value=result.sceneEpoch;controlled.value=!!result.controlledFishId;clearInput();}
   function clearInput(){move={kind:'idle'};actions=[];}
   function sendInput(){
@@ -69,5 +71,5 @@ export const useSession=defineStore('session',()=>{
   async function createFish(nickname:string,appearance:unknown){await command('/fish',{nickname,appearance});await refresh();await claimControl();await joinTank();}
   async function follow(enabled:boolean,leaderFishId?:string){return ack('guild:follow',{enabled,leaderFishId,sceneEpoch:sceneEpoch.value});}
   function stop(){disposed=true;if(timer)clearInterval(timer);if(refreshTimer)clearTimeout(refreshTimer);socket?.removeAllListeners();socket?.disconnect();socket=undefined;clearInput();listeners.clear();events.clear();inputListeners.clear();window.removeEventListener('blur',clearInput);document.removeEventListener('visibilitychange',clearInput);}
-  return{me,snapshot,status,error,controlled,sceneEpoch,lastMatchId,onlineCount,start,stop,refresh,joinTank,claimControl,setMove,action,createFish,follow,onInput:(fn:(p:InputFrame)=>void)=>{inputListeners.add(fn);return()=>inputListeners.delete(fn);},onSnapshot:(fn:(p:SceneSnapshot)=>void)=>{listeners.add(fn);return()=>listeners.delete(fn);},onEvent:(fn:(e:SceneEvent)=>void)=>{events.add(fn);return()=>events.delete(fn);}};
+  return{me,snapshot,status,error,controlled,sceneEpoch,lastMatchId,onlineCount,start,stop,refresh,joinTank,watchMatch,forgetMatch,claimControl,setMove,action,createFish,follow,onInput:(fn:(p:InputFrame)=>void)=>{inputListeners.add(fn);return()=>inputListeners.delete(fn);},onSnapshot:(fn:(p:SceneSnapshot)=>void)=>{listeners.add(fn);return()=>listeners.delete(fn);},onEvent:(fn:(e:SceneEvent)=>void)=>{events.add(fn);return()=>events.delete(fn);}};
 });

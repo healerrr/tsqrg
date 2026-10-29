@@ -28,7 +28,9 @@ export function registerGrowthRoutes(app:FastifyInstance,world:World) {
         WHERE g.status='ACTIVE' ORDER BY COALESCE(s.points,0) DESC,COALESCE(s.wins,0) DESC,
         CASE WHEN COALESCE(s.wins+s.draws+s.losses,0)=0 THEN 0 ELSE s.wins::float/(s.wins+s.draws+s.losses) END DESC,g.id`,[seasonKey()]);
       const membership=await pool.query('SELECT guild_id FROM guild_members WHERE user_id=$1',[userId]);
-      return {data:{entries:result.rows.slice(offset,offset+query.limit).map((row,index)=>({...row,guildId:row.id,rank:offset+index+1})),myRank:result.rows.findIndex(row=>row.id===membership.rows[0]?.guild_id)+1||null,seasonId:seasonKey(),nextCursor:offset+query.limit<result.rows.length?String(offset+query.limit):null},requestId:request.id};
+      const ranked=result.rows.map((row,index)=>({...row,guildId:row.id,rank:index+1}));
+      const myIndex=ranked.findIndex(row=>row.id===membership.rows[0]?.guild_id);
+      return {data:{entries:ranked.slice(offset,offset+query.limit),myRank:myIndex>=0?myIndex+1:null,nearby:myIndex>=0?ranked.slice(Math.max(0,myIndex-2),myIndex+3):[],seasonId:seasonKey(),nextCursor:offset+query.limit<ranked.length?String(offset+query.limit):null},requestId:request.id};
     }
     const roleCondition=query.scope==='guests'?"u.role='GUEST'":"u.role IN ('MEMBER','ADMIN')";
     const value=query.kind==='growth'?"COALESCE((SELECT sum(r.xp_delta)::int FROM reward_events r WHERE r.fish_id=f.id AND r.business_date>=$1::date),0)":"w.balance";
@@ -37,7 +39,8 @@ export function registerGrowthRoutes(app:FastifyInstance,world:World) {
       query.kind==='growth'?[weekStartDate()]:[]);
     const all=rows.rows.map(row=>({userId:row.user_id,fishId:row.fish_id,nickname:row.nickname,appearance:row.appearance_json,level:levelFromXp(row.total_xp),totalPower:basePower(levelFromXp(row.total_xp))+row.balance,value:query.kind==='growth'?row.rank_value:basePower(levelFromXp(row.total_xp))+row.balance}))
       .sort((a,b)=>b.value-a.value||b.level-a.level||a.userId.localeCompare(b.userId));
-    return {data:{entries:all.slice(offset,offset+query.limit).map((row,index)=>({...row,rank:offset+index+1})),myRank:all.findIndex(row=>row.userId===userId)+1||null,nextCursor:offset+query.limit<all.length?String(offset+query.limit):null},requestId:request.id};
+    const ranked=all.map((row,index)=>({...row,rank:index+1})),myIndex=ranked.findIndex(row=>row.userId===userId);
+    return {data:{entries:ranked.slice(offset,offset+query.limit),myRank:myIndex>=0?myIndex+1:null,nearby:myIndex>=0?ranked.slice(Math.max(0,myIndex-2),myIndex+3):[],nextCursor:offset+query.limit<ranked.length?String(offset+query.limit):null},requestId:request.id};
   });
   return ecosystem;
 }

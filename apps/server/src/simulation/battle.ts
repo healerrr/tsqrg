@@ -120,6 +120,7 @@ export class BattleWorld implements BattleBridge {
     }
   }
   private simulate(arena:ArenaRuntime,now:number,dt:number) {
+    if(arena.transitionPending)return;
     const team=isTeam(arena.mode),geometry=team?config.battle.teamArena:config.battle.duelArena;
     const previous=new Map<string,Vec2>();
     const disconnectedPastGrace=arena.fighters.filter(f=>!f.withdrawn&&f.player.disconnectedAt!==null&&now-f.player.disconnectedAt>config.battle.disconnectGraceSeconds*1000);
@@ -128,7 +129,14 @@ export class BattleWorld implements BattleBridge {
       this.settle(arena,{winnerTeam:sides.size===2?null:disconnectedPastGrace[0]!.locked.team==='A'?'B':'A',reason:sides.size===2?'DRAW':'DISCONNECT',scoreA:0,scoreB:0});
       return;
     }
-    for(const fighter of disconnectedPastGrace)fighter.withdrawn=true;
+    if(disconnectedPastGrace.length) {
+      for(const fighter of disconnectedPastGrace)this.withdraw(arena,fighter,'DISCONNECT',now);
+      arena.transitionPending=true;
+      void this.matches.markWithdrawn(arena.id,disconnectedPastGrace.map(fighter=>fighter.locked.userId),'DISCONNECT').then(()=>{
+        arena.transitionPending=false;if(!arena.result)this.simulate(arena,Date.now(),0);
+      }).catch(error=>{arena.transitionPending=false;console.error('断线退出记录失败',arena.id,error);});
+      return;
+    }
     for(const fighter of arena.fighters) {
       const player=fighter.player,fish=player.fish;previous.set(fish.id,{...fish.position});
       if(fighter.withdrawn){fish.velocity={x:0,y:0};fish.animation='bubble';fish.interactive=false;continue;}
@@ -137,7 +145,7 @@ export class BattleWorld implements BattleBridge {
         const own=arena.fighters.filter(f=>f.locked.team===fighter.locked.team),index=own.indexOf(fighter);
         const spawn=(fighter.locked.team==='A'?geometry.spawnsA:geometry.spawnsB)[index]!;
         fish.position={...spawn};fish.hp=fighter.locked.stats.hp;fish.respawnAtServerMs=null;fish.animation='idle';fighter.respawnAt=null;
-        fighter.protectionUntil=now+config.battle.pearl.spawnProtectionSeconds*1000;fish.shieldUntilServerMs=fighter.protectionUntil;
+        fighter.protectionUntil=now+config.battle.pearl.spawnProtectionSeconds*1000;fish.shieldUntilServerMs=fighter.protectionUntil;fish.spawnProtectionUntilServerMs=fighter.protectionUntil;
         this.world.sceneEvent(arena.roomId,{kind:'respawn',fishId:fish.id,position:fish.position});
       }
       const valid=player.controlSocketId&&player.leaseUntil>now&&player.pageVisible&&now-player.lastInputAt<=350&&player.disconnectedAt===null;
@@ -224,22 +232,36 @@ export class BattleWorld implements BattleBridge {
       player.fish={...fighter.tankFish,appearance:player.self.appearance??fighter.tankFish.appearance,level:player.self.level,guildId:player.self.guildId,team:null,hp:null,maxHp:null,animation:'idle',velocity:{x:0,y:0},followGroupId:null,shieldUntilServerMs:0,respawnAtServerMs:null,interactive:player.disconnectedAt===null};
       player.input={kind:'idle'};player.ackInputSeq=0;player.ackActionSeq=0;player.dashUntil=0;player.shieldUntil=0;this.newEpoch(player);
     }
+    for(const connection of this.world.connections.values())if(connection.watchMatchId===arena.id) {
+      connection.watchMatchId=undefined;connection.sceneEpoch=randomUUID();
+    }
     this.arenas.delete(arena.id);
   }
   disconnected(_userId:string) { /* Per-player disconnect timestamps belong to World and are inspected each tick. */ }
-  async join(userId:string,request:{sceneKind:string;watchMatchId?:string}) {
-    const arena=this.forUser(userId);
+  async join(userId:string,request:{sceneKind:string;watchMatchId?:string},connection?:ConnectionRuntime) {
+    const ownArena=this.forUser(userId);
     if(request.sceneKind==='TANK') {
-      assert(!arena||['FINISHED','ABORTED'].includes(arena.phase),'MATCH_STATE_INVALID','比赛进行中，请结束后返回主缸');
-      if(arena)this.restore(arena);return;
+      assert(!ownArena||['FINISHED','ABORTED'].includes(ownArena.phase),'MATCH_STATE_INVALID','比赛进行中，请结束后返回主缸');
+      if(connection)connection.watchMatchId=undefined;
+      if(ownArena)this.restore(ownArena);return;
     }
-    assert(arena && (!request.watchMatchId||request.watchMatchId===arena.id),'FISH_NOT_OWNED','没有进入这场竞技的权限',403);
-    assert(request.sceneKind===(isTeam(arena.mode)?'TEAM':'DUEL'),'MATCH_STATE_INVALID','竞技场类型不匹配');
+    if(request.watchMatchId) {
+      const arena=this.arenas.get(request.watchMatchId),player=this.world.players.get(userId);
+      assert(connection&&player&&arena&&isTeam(arena.mode),'FISH_NOT_OWNED','没有进入这场竞技的权限',403);
+      assert(!!player.self.guildId&&[arena.guildA,arena.guildB].includes(player.self.guildId),'FISH_NOT_OWNED','只有参赛鱼群成员可以观战',403);
+      assert(!arena.fighters.some(f=>f.locked.userId===userId),'MATCH_STATE_INVALID','参赛者已在竞技场中');
+      assert(request.sceneKind==='TEAM','MATCH_STATE_INVALID','竞技场类型不匹配');
+      player.input={kind:'idle'};connection.watchMatchId=arena.id;return;
+    }
+    assert(ownArena,'FISH_NOT_OWNED','没有进入这场竞技的权限',403);
+    if(connection)connection.watchMatchId=undefined;
+    assert(request.sceneKind===(isTeam(ownArena.mode)?'TEAM':'DUEL'),'MATCH_STATE_INVALID','竞技场类型不匹配');
   }
   snapshot(player:PlayerRuntime,connection:ConnectionRuntime):SceneSnapshot|null {
-    const arena=this.forUser(player.self.userId);if(!arena||player.roomId!==arena.roomId)return null;
-    const own=arena.fighters.find(f=>f.locked.userId===player.self.userId)!;
-    const controlled=player.controlSocketId===connection.socket.id&&player.leaseUntil>Date.now()&&!own.withdrawn;
+    const arena=connection.watchMatchId?this.arenas.get(connection.watchMatchId):this.forUser(player.self.userId);
+    if(!arena||(!connection.watchMatchId&&player.roomId!==arena.roomId))return null;
+    const own=arena.fighters.find(f=>f.locked.userId===player.self.userId);
+    const controlled=!!own&&!connection.watchMatchId&&player.controlSocketId===connection.socket.id&&player.leaseUntil>Date.now()&&!own.withdrawn;
     return {protocolVersion:1,snapshotKind:'full',rulesVersion:config.rulesVersion,roomId:arena.roomId,roomEpoch:arena.roomEpoch,sceneEpoch:connection.sceneEpoch,sceneKind:isTeam(arena.mode)?'TEAM':'DUEL',serverTick:this.world.serverTick,serverTimeMs:Date.now(),ackInputSeq:player.ackInputSeq,ackActionSeq:player.ackActionSeq,controlledFishId:controlled?player.fish.id:null,
       fish:arena.fighters.map(f=>({...f.player.fish,disconnectDeadlineAtServerMs:f.player.disconnectedAt===null?null:f.player.disconnectedAt+config.battle.disconnectGraceSeconds*1000})),food:[],npc:[],pearl:arena.pearl?{id:`pearl:${arena.id}`,position:arena.pearl.position,carrierFishId:arena.pearl.carrierFishId,oldCarrierFishId:arena.pearl.oldCarrierFishId,oldCarrierBlockedUntilServerMs:arena.pearl.oldCarrierBlockedUntilServerMs}:null,
       match:{id:arena.id,phase:arena.phase,deadlineAtServerMs:arena.deadline,scoreA:arena.scoreA,scoreB:arena.scoreB},ownRuntime:controlled?{stamina:config.tank.staminaMax,dashReadyAtServerMs:player.dashReadyAt,shieldReadyAtServerMs:player.shieldReadyAt}:null};

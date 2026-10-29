@@ -43,7 +43,8 @@ export class MatchService {
   stop() { if (this.maintenanceTimer) clearInterval(this.maintenanceTimer); this.maintenanceTimer = null; }
   private isOnline(userId: string): boolean {
     const player = this.world.players.get(userId);
-    return !!player?.controlSocketId && player.disconnectedAt === null && player.leaseUntil > Date.now() && !!this.world.connections.get(player.controlSocketId)?.socket.connected;
+    const connection = player?.controlSocketId ? this.world.connections.get(player.controlSocketId) : undefined;
+    return !!player?.controlSocketId && player.disconnectedAt === null && player.leaseUntil > Date.now() && !!connection?.socket.connected && !connection.watchMatchId;
   }
   private async assertFree(client: Queryable, userIds: string[], except?: string) {
     const busy = await client.query('SELECT p.user_id FROM match_participants p JOIN matches m ON m.id=p.match_id WHERE p.user_id=ANY($1::uuid[]) AND m.status=ANY($2::text[]) AND ($3::uuid IS NULL OR m.id<>$3)', [userIds,activePhases,except??null]);
@@ -337,7 +338,7 @@ export class MatchService {
         await this.finalize(client,match,{winnerTeam:activeSides.size===1?[...activeSides][0] as 'A'|'B':null,reason:activeSides.size===1?'FORFEIT':'DRAW',scoreA:0,scoreB:0});
       } else await this.finalize(client,match,this.decisions.get(id)??{winnerTeam:playing?(own!.team==='A'?'B':'A'):null,reason:playing?'FORFEIT':'SYSTEM_ABORT',scoreA:0,scoreB:0});
       return this.publicView(await this.matchRow(client,id),client);
-    });await this.sync(id);return result;
+    },{allowWhenPaused:true});await this.sync(id);return result;
   }
   async abort(id:string) {return this.settle(id,{winnerTeam:null,reason:'SYSTEM_ABORT',scoreA:0,scoreB:0});}
   async recoverOldMatches(onlyMatchIds?:string[]) {

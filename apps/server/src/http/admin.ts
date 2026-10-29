@@ -10,6 +10,7 @@ import type { World } from '../simulation/world';
 import { assert } from './errors';
 
 const pageSchema = z.object({ cursor: z.coerce.number().int().nonnegative().default(0), limit: z.coerce.number().int().min(1).max(100).default(20) });
+const moderateFishSchema = z.object({ nickname: z.string(), reason: z.string().trim().min(2).max(200) }).strict();
 type RuntimeOverview = () => Promise<unknown>;
 
 export function registerAdminRoutes(app: FastifyInstance, world: World, overview: RuntimeOverview) {
@@ -32,16 +33,18 @@ export function registerAdminRoutes(app: FastifyInstance, world: World, overview
   });
   app.post('/api/v1/admin/invites', async request => {
     const userId = await admin(request), payload = adminInviteSchema.parse(request.body);
+    let oneTimeCode: string | undefined;
     const result = await durable(userId, 'admin:invite', key(request), payload, async client => {
       const expires = payload.expiresAt ? new Date(payload.expiresAt) : new Date(Date.now() + 7 * 86400000);
       assert(expires.getTime() > Date.now(), 'VERSION_CONFLICT', '邀请码到期时间必须晚于现在', 400);
       const id = randomUUID(), inviteCode = randomBytes(12).toString('base64url');
+      oneTimeCode = inviteCode;
       await client.query('INSERT INTO employee_invites(id,code_hash,employee_ref,expires_at) VALUES ($1,$2,$3,$4)', [id, hash(inviteCode), payload.employeeRef, expires]);
       await audit(client, userId, 'INVITE_CREATE', id, null, { employeeRef: payload.employeeRef, expiresAt: expires.toISOString() });
-      // The code is returned for this idempotent command only, never by the listing endpoint or logs.
-      return { id, inviteCode, employeeRef: payload.employeeRef, expiresAt: expires.toISOString() };
+      // Durable replay data deliberately excludes the secret. A retried response cannot reveal it again.
+      return { id, employeeRef: payload.employeeRef, expiresAt: expires.toISOString() };
     });
-    return ok(result, request.id);
+    return ok(oneTimeCode ? { ...result, inviteCode: oneTimeCode } : result, request.id);
   });
   app.get('/api/v1/admin/shop/items', async request => { await admin(request); return ok((await pool.query('SELECT * FROM shop_items ORDER BY scope,price,id')).rows, request.id); });
   app.patch<{ Params: { id: string } }>('/api/v1/admin/shop/items/:id', async request => {
@@ -76,7 +79,10 @@ export function registerAdminRoutes(app: FastifyInstance, world: World, overview
     await world.refreshPlayer(result.userId); world.invalidate(result.userId, ['fish']); return ok(result, request.id);
   });
   app.patch<{ Params: { id: string } }>('/api/v1/admin/fish/:id', async request => {
-    const actor = await admin(request), fishId = uuidSchema.parse(request.params.id), payload = z.object({ nickname: nicknameSchema, reason: z.string().trim().min(2).max(200) }).strict().parse(request.body);
+    const actor = await admin(request);
+    const fishId = uuidSchema.parse(request.params.id);
+    const parsed = moderateFishSchema.parse(request.body);
+    const payload = { nickname: nicknameSchema.parse(parsed.nickname), reason: parsed.reason };
     const result = await durable(actor, `admin:fish:${fishId}`, key(request), payload, async client => {
       const old = (await client.query('SELECT user_id,nickname FROM fish WHERE id=$1 FOR UPDATE', [fishId])).rows[0]; assert(old, 'FISH_NOT_OWNED', '角色不存在', 404);
       await client.query('UPDATE fish SET nickname=$2 WHERE id=$1', [fishId, payload.nickname]);
