@@ -96,6 +96,7 @@ onBeforeUnmount(()=>{session.stop();sound.destroy();aquarium?.destroy();clearTim
       <div class="battle-side team-b"><span class="battle-team-label">● B队</span><div class="battle-squad"><div v-for="fish in teamBFish" :key="fish.id" :class="{own:fish.id===session.me?.fishId,carrier:battleSnapshot.pearl?.carrierFishId===fish.id,withdrawn:fish.withdrawn}"><b>{{fish.nickname}}</b><strong>{{battleFishStatus(fish)}}</strong></div></div></div>
     </section>
     <div v-if="battleSnapshot?.match?.phase==='COUNTDOWN'" class="arena-countdown">{{battleSeconds||'开始'}}</div>
+    <div v-if="battleSnapshot" class="orientation-warning glass" role="status">竞技操作建议切换为手机横屏；竖屏可继续观察和打开比赛菜单。</div>
     <div v-if="reconnectingFish.length" class="battle-disconnect glass">{{reconnectingFish.some(fish=>fish.id===session.me?.fishId)?'你的连接正在恢复':`${reconnectingFish.length} 名参赛者正在重连`}}，倒计时后将退出本局</div>
     <div v-if="!isPreview&&session.status==='online'&&!session.controlled&&session.me?.fishId" class="control-notice glass">当前页面为观察模式 <button @click="session.claimControl().catch(e=>toast(e.message))">接管控制</button></div>
     <div v-if="!isPreview&&session.status==='error'" class="network-error glass" role="alert"><b>暂时无法进入水族箱</b><p>{{session.error}}</p><button class="primary" @click="reloadPage">重新连接</button><a href="/?preview=1">查看本地美术预览</a></div>
