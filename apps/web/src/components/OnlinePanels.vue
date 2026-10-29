@@ -13,7 +13,7 @@ const emit=defineEmits<{preview:[Appearance];close:[];toast:[string]}>();
 const session=useSession();
 const loading=ref(false),busy=ref(false),error=ref(''),nickname=ref(''),inviteCode=ref(''),surfaceX=ref(960),tab=ref('all');
 const draft=ref<Appearance>(structuredClone({...props.appearance,equipped:{...props.appearance.equipped}}));
-const inventory=ref<string[]>([]),shopItems=ref<any[]>([]),skinAssets=ref<any[]>([]),skinNext=ref<string|null>(null),ranking=ref<any[]>([]),rankKind=ref('power');
+const inventory=ref<string[]>([]),shopItems=ref<any[]>([]),guildShopItems=ref<any[]>([]),skinAssets=ref<any[]>([]),skinNext=ref<string|null>(null),ranking=ref<any[]>([]),rankKind=ref('power');
 const rankMeta=ref<{myRank:number|null;nextCursor:string|null}>({myRank:null,nextCursor:null});
 const purchase=ref<any|null>(null),players=ref<any[]>([]),guilds=ref<any[]>([]),guild=ref<any|null>(null);
 const guildName=ref(''),guildSearch=ref(''),guildNext=ref<string|null>(null),ledgerNext=ref<string|null>(null),notice=ref(''),donation=ref(10);
@@ -40,8 +40,8 @@ async function load(){
     }
     if(props.panel==='rank'){const r=await api<any>(rankUrl());ranking.value=rows(r);rankMeta.value={myRank:r.myRank,nextCursor:r.nextCursor};}
     if(props.panel==='guild'){
-      const [listed,tankPlayers]=await Promise.all([api<any>(guildListUrl()),api('/players')]);
-      guilds.value=rows(listed);guildNext.value=listed.nextCursor??null;players.value=rows(tankPlayers);
+      const [listed,tankPlayers,catalog]=await Promise.all([api<any>(guildListUrl()),api('/players'),api<any>('/shop/items?scope=GUILD&limit=100')]);
+      guilds.value=rows(listed);guildNext.value=listed.nextCursor??null;players.value=rows(tankPlayers);guildShopItems.value=rows(catalog);
       if(session.me?.guildId){guild.value=await api(`/guilds/${session.me.guildId}`);notice.value=guild.value.notice??'';}
       else guild.value=null;
     }
@@ -158,7 +158,7 @@ async function confirmGuildAction(){
       </template>
       <label class="form-field">自愿捐献（不可退回个人）<input type="number" v-model.number="donation" min="1" step="1" aria-label="捐献数量"/></label><button class="primary wide" @click="guildConfirm={kind:'donate',text:`确认自愿捐献 ${donation} 点可用战力？组织钱包仅可购买公共装扮。`}" :disabled="busy||donation<1">捐献 {{donation}} 战力</button>
       <div v-if="guildConfirm" class="purchase-confirm"><p>{{guildConfirm.text}}</p><div class="inline-form"><button @click="guildConfirm=null">取消</button><button class="primary" @click="confirmGuildAction">确认</button></div></div>
-      <details class="bind-section"><summary>公共装扮与组织流水</summary><div v-for="item in config.catalog.filter(i=>i.scope==='GUILD')" :key="item.id" class="list-row"><span>{{item.name}} · {{item.price}} 战力</span><b v-if="guildItemOwned(item.id)">已拥有并启用</b><button v-else-if="myGuildRole==='LEADER'" @click="guildAction(`/guilds/${guild.id}/purchases`,{itemId:item.id,itemVersion:1},'公共装扮已购买并启用')" :disabled="busy">购买</button></div><button class="text-button" @click="loadLedger(true)" :disabled="busy">读取组织流水</button><div v-for="l in guild.ledger" :key="l.id" class="ledger-row">{{l.kind}} · {{l.amount>0?'+':''}}{{l.amount}} · 余额{{l.balance_after}} · {{new Date(l.created_at??l.createdAt).toLocaleString('zh-CN')}}</div><button v-if="ledgerNext" class="text-button" @click="loadLedger(false)" :disabled="busy">加载更多流水</button></details>
+      <details class="bind-section"><summary>公共装扮与组织流水</summary><div v-for="item in guildShopItems" :key="item.id" class="list-row"><span>{{item.name}} · {{item.price}} 战力</span><b v-if="guildItemOwned(item.id)">已拥有并启用</b><small v-else-if="item.enabled===false">已下架</small><button v-else-if="myGuildRole==='LEADER'" @click="guildAction(`/guilds/${guild.id}/purchases`,{itemId:item.id,itemVersion:item.version},'公共装扮已购买并启用')" :disabled="busy">购买</button></div><button class="text-button" @click="loadLedger(true)" :disabled="busy">读取组织流水</button><div v-for="l in guild.ledger" :key="l.id" class="ledger-row">{{l.kind}} · {{l.amount>0?'+':''}}{{l.amount}} · 余额{{l.balance_after}} · {{new Date(l.created_at??l.createdAt).toLocaleString('zh-CN')}}</div><button v-if="ledgerNext" class="text-button" @click="loadLedger(false)" :disabled="busy">加载更多流水</button></details>
       <details class="bind-section"><summary>成员与组织管理</summary><p class="tiny-label">退出或被移出后 {{config.guild.rejoinCooldownHours}} 小时内不能加入或创建其他鱼群；比赛期间不能退出或移除。组织长须先转让职位或解散。</p><button v-if="myGuildRole!=='LEADER'" class="danger-button" @click="guildAction(`/guilds/${guild.id}/leave`,{},'已退出鱼群，进入24小时冷却')" :disabled="busy">退出鱼群</button><button v-else class="danger-button" @click="guildConfirm={kind:'dissolve',text:'解散会归档全部组织资产，不向个人退款；仍有未完成比赛时服务器会拒绝。确认继续？'}" :disabled="busy">解散鱼群</button></details>
     </template>
   </template>
