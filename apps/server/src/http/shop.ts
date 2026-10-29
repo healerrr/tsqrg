@@ -6,6 +6,7 @@ import { equipSchema, purchaseSchema, updateFishSchema, uuidSchema } from '@aqua
 import { equipItem, updateAppearance } from '../services/appearance';
 import { getInventory, getShopItems, purchaseItem } from '../services/shop';
 import { readSkin, saveSkin } from '../services/uploads';
+import { pool } from '../persistence/db';
 import type { World } from '../simulation/world';
 import { AppError, assert } from './errors';
 
@@ -42,6 +43,12 @@ export async function registerShopRoutes(app:FastifyInstance,world:World){
       assert(input,'UPLOAD_INVALID','请选择一张图片上传',400);
       return {data:await saveSkin(userId,key(request),input),requestId:request.id};
     }catch(error){if(error instanceof AppError)throw error;throw new AppError('UPLOAD_INVALID','图片上传失败，请确认仅选择一张2MB以内的PNG/WebP图片',400);}
+  });
+  app.get('/api/v1/uploads/skins',async request=>{
+    const userId=auth(request);
+    const query=z.object({cursor:z.coerce.number().int().nonnegative().default(0),limit:z.coerce.number().int().min(1).max(100).default(12)}).parse(request.query);
+    const result=await pool.query('SELECT id,mime,width,height,status,created_at FROM uploads WHERE user_id=$1 ORDER BY created_at DESC,id DESC OFFSET $2 LIMIT $3',[userId,query.cursor,query.limit+1]);
+    return {data:{items:result.rows.slice(0,query.limit),nextCursor:result.rows.length>query.limit?String(query.cursor+query.limit):null},requestId:request.id};
   });
   app.get<{Params:{id:string}}>('/api/assets/:id',async(request,reply)=>{
     const assetId=uuidSchema.parse(request.params.id);

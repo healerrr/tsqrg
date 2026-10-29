@@ -106,5 +106,6 @@
 - Vite 生产拆包将 Vue、PixiJS、Socket.IO 和图标拆为稳定独立 chunk；本轮生成的主业务 JS 为 230.17 kB，Pixi chunk 为 532.73 kB。`pnpm build` 已生成带新哈希的 `dist`，但命令跨过本工具 30 秒回传窗口且未捕获最终退出行，因此本段不把完整构建记为新一次通过，留待统一验收复跑。
 - 本轮实际通过：Node 24 的 Protocol `tsc --noEmit`、Server `tsc --noEmit`、Web `vue-tsc --noEmit`、改动相关 TypeScript ESLint、`git diff --check`。按“测试后置”要求未启动 PostgreSQL，未运行 M7/M8 集成、浏览器 E2E、30 连接、30 分钟耐久、备份恢复或 Docker 空环境。
 - 生产 API 完成日志现统一输出 `requestId`、`userId`、`matchId`、`operationSource`、状态码和耗时；Fastify redaction 继续隐藏 Cookie、Authorization、邀请码明文和 Set-Cookie。运维概览及 `/metrics` 新增 HTTP 总请求与错误响应计数，服务启动/停机日志改为结构化 logger。本项 Server 类型检查与针对性 ESLint 通过，未通过真实流量验证。
+- 补齐贴图资产闭环：`GET /uploads/skins` 只读返回本人分页贴图库；“我的鱼”可查看、预览并重新应用仍有效的历史贴图，下架项保留记录并明确不可用，管理员列表可直接查看自托管缩略图后再处置。鱼页同时补显示历史最高战力，竞技页补显示正式赛已用/预留/剩余额度。Server/Web 类型检查与相关 Server ESLint 通过，数据库和浏览器路径待统一验收。
 
 记录日期、所完成阶段、改变的文件、实际运行命令、运行结果、人工验证证据、尚未完成的事项以及下一步。项目原有规则调整也在这里记录，不把尚未实现的需求标为完成。

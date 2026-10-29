@@ -13,7 +13,7 @@ const emit=defineEmits<{preview:[Appearance];close:[];toast:[string]}>();
 const session=useSession();
 const loading=ref(false),busy=ref(false),error=ref(''),nickname=ref(''),inviteCode=ref(''),surfaceX=ref(960),tab=ref('all');
 const draft=ref<Appearance>(structuredClone({...props.appearance,equipped:{...props.appearance.equipped}}));
-const inventory=ref<string[]>([]),shopItems=ref<any[]>([]),ranking=ref<any[]>([]),rankKind=ref('power');
+const inventory=ref<string[]>([]),shopItems=ref<any[]>([]),skinAssets=ref<any[]>([]),skinNext=ref<string|null>(null),ranking=ref<any[]>([]),rankKind=ref('power');
 const rankMeta=ref<{myRank:number|null;nextCursor:string|null}>({myRank:null,nextCursor:null});
 const purchase=ref<any|null>(null),players=ref<any[]>([]),guilds=ref<any[]>([]),guild=ref<any|null>(null);
 const guildName=ref(''),guildSearch=ref(''),guildNext=ref<string|null>(null),ledgerNext=ref<string|null>(null),notice=ref(''),donation=ref(10);
@@ -32,6 +32,7 @@ async function load(){
     if(props.panel==='create'){draft.value={...draft.value,equipped:{},skinAssetId:null,patternId:'none',version:1};nickname.value='';preview();}
     if(props.panel==='fish'||props.panel==='shop'){
       if(session.me?.appearance)draft.value=JSON.parse(JSON.stringify(session.me.appearance));nickname.value=session.me?.nickname??'';
+      if(props.panel==='fish')await loadSkins(true);
     }
     if(props.panel==='shop'){
       const [catalog,wardrobe]=await Promise.all([api<any>('/shop/items'),api<any>('/inventory')]);
@@ -55,8 +56,10 @@ function isEquipped(item:any){return session.me?.appearance?.equipped[item.slot 
 async function equip(item:any){const itemId=isEquipped(item)?null:item.id;await run(async()=>{await command('/inventory/equip',{slot:item.slot,itemId,version:session.me?.appearance?.version});await session.refresh();if(session.me?.appearance){draft.value=JSON.parse(JSON.stringify(session.me.appearance));preview();}},itemId?'已穿戴':'已脱下');}
 async function upload(e:Event){const input=e.target as HTMLInputElement,file=input.files?.[0];if(!file)return;
   if(file.size>config.upload.maxBytes){error.value='图片不能超过2MB';return;}
-  await run(async()=>{const form=new FormData();form.append('file',file);const result=await command<any>('/uploads/skins',form);draft.value={...draft.value,skinAssetId:result.assetId??result.id};preview();},'贴图已安全处理，预览后记得保存');input.value='';
+  await run(async()=>{const form=new FormData();form.append('file',file);const result=await command<any>('/uploads/skins',form);draft.value={...draft.value,skinAssetId:result.assetId??result.id};preview();await loadSkins(true);},'贴图已安全处理，预览后记得保存');input.value='';
 }
+async function loadSkins(reset=false){const cursor=reset?null:skinNext.value;if(!reset&&!cursor)return;const result=await api<any>(`/uploads/skins?limit=12${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`);if(reset)skinAssets.value=rows(result);else skinAssets.value.push(...rows(result));skinNext.value=result.nextCursor??null;}
+async function moreSkins(){await run(()=>loadSkins(false));}
 async function claimInvite(){await run(async()=>{await command('/auth/claim',{inviteCode:inviteCode.value});inviteCode.value='';},'已绑定同事身份，原有角色与资产保留');}
 async function feed(){await run(async()=>{await command('/tank/feed',{roomId:session.snapshot?.roomId,surfaceX:surfaceX.value,sceneEpoch:session.sceneEpoch});emit('close');},'鱼粮已投下，游过去看看！');}
 async function supply(){await run(async()=>{const r=await command<any>('/rewards/daily');emit('toast',r.replayed?'今日补给已经领取，本次没有重复发放':`今日补给到账：${r.actualXp??r.xp??0} 经验，${r.actualPower??r.power??0} 战力`);});}
@@ -93,8 +96,8 @@ async function confirmGuildAction(){
     <div class="appearance-fields"><label class="field-label">尾鳍颜色<input type="color" v-model="draft.finColor" @input="preview" aria-label="尾鳍颜色"/></label><label class="field-label">花纹<select v-model="draft.patternId" @change="preview" aria-label="花纹"><option value="none">纯色</option><option value="stripes">条纹</option><option value="spots">斑点</option><option value="belly">浅色肚皮</option></select></label></div>
     <template v-if="panel==='fish'&&session.me">
       <div class="growth-bar"><span :style="{width:xpProgress+'%'}"></span></div><p class="tiny-label">Lv.{{session.me.level}} · 累计 {{session.me.totalXp}} XP · 今日 {{session.me.daily.xpMinted}} / {{config.daily.xpMintCap}} XP</p>
-      <div class="wallet-grid"><div><b>{{session.me.wallet.basePower}}</b><small>永久基础 B</small></div><div><b>{{session.me.wallet.powerBalance}}</b><small>争夺余额 C</small></div><div><b>{{session.me.wallet.heldPower}}</b><small>冻结额度 H</small></div><div><b>{{session.me.wallet.availablePower}}</b><small>可用额度 A</small></div></div>
-      <label class="upload-button"><Upload :size="17"/>上传身体贴图（PNG / WebP，2MB以内）<input type="file" accept="image/png,image/webp" @change="upload" :disabled="busy"/></label><p class="tiny-label">上传后先预览，再保存。贴图不会改变体型判定或战斗属性。</p>
+      <div class="wallet-grid"><div><b>{{session.me.wallet.basePower}}</b><small>永久基础 B</small></div><div><b>{{session.me.wallet.powerBalance}}</b><small>争夺余额 C</small></div><div><b>{{session.me.wallet.heldPower}}</b><small>冻结额度 H</small></div><div><b>{{session.me.wallet.availablePower}}</b><small>可用额度 A</small></div></div><p class="tiny-label">当前总战力 {{session.me.wallet.totalPower}} · 历史最高 {{session.me.wallet.highestPower}}</p>
+      <label class="upload-button"><Upload :size="17"/>上传身体贴图（PNG / WebP，2MB以内）<input type="file" accept="image/png,image/webp" @change="upload" :disabled="busy"/></label><p class="tiny-label">上传后先预览，再保存。贴图不会改变体型判定或战斗属性。</p><details v-if="skinAssets.length" class="bind-section"><summary>我的贴图库 · {{skinAssets.length}} 项</summary><div class="skin-library"><div v-for="skin in skinAssets" :key="skin.id" :class="{chosen:draft.skinAssetId===skin.id}"><img v-if="skin.status==='ACTIVE'" :src="`/api/assets/${encodeURIComponent(skin.id)}`" :alt="`我的贴图 ${skin.id}`" loading="lazy"/><span v-else>已下架</span><small>{{skin.width}}×{{skin.height}}</small><button v-if="skin.status==='ACTIVE'" @click="draft.skinAssetId=skin.id;preview()" :disabled="busy">{{draft.skinAssetId===skin.id?'正在预览':'预览'}}</button><small v-else>资产记录已保留，管理员恢复后可再次使用</small></div></div><button v-if="skinNext" class="text-button" @click="moreSkins" :disabled="busy">加载更多贴图</button></details>
       <button v-if="draft.skinAssetId" class="text-button" @click="draft.skinAssetId=null;preview()">移除当前贴图</button>
       <details class="bind-section"><summary><UserRoundCheck :size="16"/>{{session.me.role==='GUEST'?'用邀请码绑定同事身份':'已绑定同事身份'}}</summary><template v-if="session.me.role==='GUEST'"><p>绑定后保留全部角色资产，开放组织和正式比赛。</p><div class="inline-form"><input v-model="inviteCode" placeholder="单次邀请码" aria-label="邀请码"/><button @click="claimInvite" :disabled="busy||!inviteCode">绑定身份</button></div></template></details>
     </template>

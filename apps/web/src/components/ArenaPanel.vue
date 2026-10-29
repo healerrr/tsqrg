@@ -76,7 +76,7 @@ onBeforeUnmount(()=>{disposed=true;if(poll)clearInterval(poll);if(clock)clearInt
 <template>
   <div class="eyebrow"><Trophy :size="17"/>偶尔，也要认真一下</div>
   <h1>{{team?'一起守住这颗珍珠':'来一场水下对决'}}</h1>
-  <p class="panel-intro">冲刺攻击，护盾防守。每位玩家只确认自己的押注。</p>
+  <p class="panel-intro">冲刺攻击，护盾防守。每位玩家只确认自己的押注。今日正式额度已用 {{session.me?.daily.formalUsed??0}}、准备预留 {{session.me?.daily.formalReserved??0}}、剩余 {{Math.max(0,config.daily.formalMatchesPerPlayer-(session.me?.daily.formalUsed??0)-(session.me?.daily.formalReserved??0))}} 场。</p>
   <div v-if="error" role="alert" class="inline-error">{{error}}<button aria-label="重新读取比赛" @click="load()"><RefreshCw :size="16"/></button></div>
   <p v-if="loading" class="loading-line">正在读取比赛与鱼群…</p>
   <template v-if="match">
