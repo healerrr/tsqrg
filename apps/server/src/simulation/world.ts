@@ -34,6 +34,7 @@ export class World {
   battle: BattleBridge | null = null;
   ecosystem: { step(now: number, dt: number): void; snapshot(roomId: string): Pick<SceneSnapshot, 'food'|'npc'> } | null = null;
   followGroups = new Map<string, FollowGroupRuntime>();
+  emptyRoomSince = new Map<string, number>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -42,21 +43,32 @@ export class World {
     const dt = 1 / config.network.serverTickHz;
     this.timer = setInterval(() => this.step(dt), 1000 / config.network.serverTickHz);
     this.snapshotTimer = setInterval(() => this.broadcastSnapshots(), 1000 / config.network.snapshotHz);
-    this.heartbeatTimer = setInterval(() => {
-      const now = Date.now();
-      for (const p of this.players.values()) if (p.controlSocketId && this.connections.get(p.controlSocketId)?.socket.connected) p.leaseUntil = now + config.network.controlLeaseTtlMs;
-      for(const roomId of this.roomEpochs.keys()) {
-        const idle=[...this.players.entries()].filter(([,p])=>p.roomId===roomId && p.disconnectedAt!==null && !p.self.currentMatchId)
-          .sort((a,b)=>(b[1].disconnectedAt??0)-(a[1].disconnectedAt??0));
-        for(const [userId] of idle.slice(config.tank.maxIdleDisplays)) this.players.delete(userId);
-      }
-    }, config.network.controlLeaseHeartbeatMs);
+    this.heartbeatTimer = setInterval(() => this.maintainPresence(), config.network.controlLeaseHeartbeatMs);
   }
   stop() { if (this.timer) clearInterval(this.timer); if (this.snapshotTimer) clearInterval(this.snapshotTimer); if (this.heartbeatTimer) clearInterval(this.heartbeatTimer); }
+  maintainPresence(now = Date.now()) {
+    for (const p of this.players.values()) if (p.controlSocketId && this.connections.get(p.controlSocketId)?.socket.connected) p.leaseUntil = now + config.network.controlLeaseTtlMs;
+    const connectedUsers = new Set([...this.connections.values()].filter(connection => connection.socket.connected).map(connection => connection.userId));
+    for (const roomId of [...this.roomEpochs.keys()]) {
+      const idle = [...this.players.entries()].filter(([userId, p]) => p.roomId === roomId && p.disconnectedAt !== null && !p.self.currentMatchId && !connectedUsers.has(userId))
+        .sort((a, b) => (b[1].disconnectedAt ?? 0) - (a[1].disconnectedAt ?? 0));
+      for (const [userId] of idle.slice(config.tank.maxIdleDisplays)) this.players.delete(userId);
+
+      const hasConnection = [...this.connections.values()].some(connection => connection.socket.connected && this.players.get(connection.userId)?.roomId === roomId);
+      if (roomId === 'tank:1' || hasConnection || this.roomSize(roomId) > 0) { this.emptyRoomSince.delete(roomId); continue; }
+      const emptySince = this.emptyRoomSince.get(roomId) ?? now;
+      this.emptyRoomSince.set(roomId, emptySince);
+      if (now - emptySince < config.tank.emptyRoomRetentionSeconds * 1000) continue;
+      for (const [userId, player] of this.players) if (player.roomId === roomId && !player.self.currentMatchId && !connectedUsers.has(userId)) this.players.delete(userId);
+      if ([...this.players.values()].some(player => player.roomId === roomId)) continue;
+      this.roomEpochs.delete(roomId); this.emptyRoomSince.delete(roomId);
+      for (const [key, group] of this.followGroups) if (group.roomId === roomId) this.followGroups.delete(key);
+    }
+  }
   private tankRoomFor(guildId: string | null, excludeUserId?: string): string {
     const guildPeer=[...this.players.entries()].find(([userId,p])=>userId!==excludeUserId&&guildId&&p.self.guildId===guildId&&p.roomId.startsWith('tank:')&&this.roomSize(p.roomId)<config.tank.maxOnlinePlayers)?.[1];
     let roomId=guildPeer?.roomId??[...this.roomEpochs.keys()].find(id=>id.startsWith('tank:')&&this.roomSize(id)<config.tank.maxOnlinePlayers);
-    if(!roomId){roomId=`tank:${this.roomEpochs.size+1}`;this.roomEpochs.set(roomId,randomUUID());}
+    if(!roomId){let number=1;while(this.roomEpochs.has(`tank:${number}`))number++;roomId=`tank:${number}`;this.roomEpochs.set(roomId,randomUUID());}
     return roomId;
   }
   tankRoomForReturn(player: PlayerRuntime, preferredRoom: string): string {

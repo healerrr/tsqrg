@@ -32,7 +32,7 @@ export interface Aquarium {
   feedPreview(): void;
   showEvent(event: SceneEvent): void;
   setMoveIntent(move: MoveIntent): void;
-  getDebugState(): { fish: Array<{ id: string; x: number; y: number; simulatedX: number; simulatedY: number; preset: string; skinStatus: string }>; input: MoveIntent; preview: boolean; prediction: { pendingInputs: number; controlled: boolean } };
+  getDebugState(): { fish: Array<{ id: string; x: number; y: number; simulatedX: number; simulatedY: number; preset: string; skinStatus: string; interactive: boolean; visualAlpha: number; presenceLabel: boolean }>; input: MoveIntent; preview: boolean; prediction: { pendingInputs: number; controlled: boolean } };
   destroy(): void;
 }
 interface Particle { display: Container; vx: number; vy: number; ttl: number; max: number; }
@@ -408,7 +408,7 @@ export async function createAquarium(host: HTMLElement, callbacks: AquariumCallb
     recordInput(frame) { if (!preview) prediction.recordInput(frame, performance.now()); },
     resetPrediction() { prediction.reset(); reconciliationOffset = { x: 0, y: 0 }; clearInput(); },
     setMoveIntent(intent) { if (enabled) sendMove(intent); },
-    getDebugState() { return { fish: [...views.values()].map(v => ({ id: v.snapshot.id, x: v.x, y: v.y, simulatedX: v.target.x, simulatedY: v.target.y, preset: v.renderedPreset, skinStatus: v.skinStatus })), input: move, preview, prediction: { pendingInputs: prediction.pendingCount, controlled: !!snapshot?.controlledFishId } }; },
+    getDebugState() { return { fish: [...views.values()].map(v => ({ id: v.snapshot.id, x: v.x, y: v.y, simulatedX: v.target.x, simulatedY: v.target.y, preset: v.renderedPreset, skinStatus: v.skinStatus, interactive: v.snapshot.interactive, visualAlpha: v.visual.alpha, presenceLabel: v.presenceText.visible })), input: move, preview, prediction: { pendingInputs: prediction.pendingCount, controlled: !!snapshot?.controlledFishId } }; },
     setSelfId(id) { if (selfId !== id) { prediction.reset(); reconciliationOffset = { x: 0, y: 0 }; clearInput(); } selfId = id; views.forEach((v, key) => v.setOwn(key === id)); },
     setAppearancePreview(a) { if (sceneKind !== 'TANK') { previewAppearance = null; return; } previewAppearance = a; const v = selfId ? views.get(selfId) : null; if (v) v.setAppearance(a || v.snapshot.appearance); },
     setReducedMotion(value) { reduced = value; },

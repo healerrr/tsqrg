@@ -59,6 +59,9 @@ export class Ecosystem {
   step(now:number,dt:number){
     for(const [id,expiresAt]of this.loadedBatches)if(expiresAt<=now)this.loadedBatches.delete(id);
     for(const [id,food]of this.food)if(!this.world.roomEpochs.has(food.roomId))this.food.delete(id);
+    for(const [id,npc]of this.npc)if(!this.world.roomEpochs.has(npc.roomId))this.npc.delete(id);
+    for(const roomId of this.nextFeed.keys())if(!this.world.roomEpochs.has(roomId))this.nextFeed.delete(roomId);
+    for(const roomId of this.nextRare.keys())if(!this.world.roomEpochs.has(roomId))this.nextRare.delete(roomId);
     if(now>=this.syncAt&&!this.syncing){this.syncAt=now+1000;this.syncing=true;void pool.query('SELECT * FROM food_batches WHERE expires_at>now() AND room_id=ANY($1::text[])',[[...this.world.roomEpochs.keys()]]).then(async result=>{for(const batch of result.rows)await this.loadBatch(batch.id,batch.room_id,batch.pellets_json);}).catch(()=>undefined).finally(()=>{this.syncing=false;});}
     for(const roomId of this.world.roomEpochs.keys()){
       const players=[...this.world.players.values()].filter(p=>p.roomId===roomId&&this.active(p,now));

@@ -9,9 +9,9 @@ type PreviewDebug = { getDebugState(): { preset?: string; skinStatus?: string; f
 function appearance(presetId: PresetId, skinAssetId: string | null): Appearance {
   return { presetId, bodyColor: PRESET_COLORS[presetId][0], finColor: PRESET_COLORS[presetId][1], patternId: 'spots', equipped: { face: 'glasses.round', head: 'headphones.basic', charm: 'charm.seagrass' }, skinAssetId, version: 1 };
 }
-function fish(appearance: Appearance, id: string, facing: 'left' | 'right', x: number, y: number): FishSnapshot {
+function fish(appearance: Appearance, id: string, facing: 'left' | 'right', x: number, y: number, interactive = true): FishSnapshot {
   return { id, nickname: '十二字昵称保持正向可读测试', position: { x, y }, velocity: { x: 0, y: 0 }, facing, angle: 0, appearance, level: 1, displaySize: 1,
-    guildId: null, team: null, animation: 'idle', interactive: false, followGroupId: null, hp: null, maxHp: null, shieldUntilServerMs: 0, respawnAtServerMs: null };
+    guildId: null, team: null, animation: 'idle', interactive, followGroupId: null, hp: null, maxHp: null, shieldUntilServerMs: 0, respawnAtServerMs: null };
 }
 
 /** Browser-only renderer fixture. It never starts a session, sends commands, or changes a wallet. */
@@ -22,7 +22,8 @@ export async function createM4RenderFixture(host: HTMLElement) {
   const main = await createAquarium(host.querySelector('#qa-tank')!, { onMove() {}, onAction() {}, onSelect() {}, onError(message) { errors.push(message); } });
   main.setPreviewMode(false); main.setSelfId('owned-visual'); main.setInputEnabled(false);
   const authoritativeFish = fish({ ...appearance('goldfish', null), equipped: {}, patternId: 'none' }, 'owned-visual', 'right', 960, 450);
-  const snapshot: SceneSnapshot = { protocolVersion: 1, snapshotKind: 'full', rulesVersion: '1.0.0', roomId: 'visual-tank', roomEpoch: 'fixture-room', sceneEpoch: 'fixture-control', sceneKind: 'TANK', serverTick: 1, serverTimeMs: Date.now(), ackInputSeq: 0, ackActionSeq: 0, controlledFishId: 'owned-visual', fish: [authoritativeFish], food: [], npc: [], pearl: null, match: null, ownRuntime: { stamina: 100, dashReadyAtServerMs: 0, shieldReadyAtServerMs: 0 } };
+  const offlineFish = fish({ ...appearance('clownfish', null), equipped: {}, patternId: 'stripes' }, 'offline-visual', 'left', 1250, 510, false);
+  const snapshot: SceneSnapshot = { protocolVersion: 1, snapshotKind: 'full', rulesVersion: '1.0.0', roomId: 'visual-tank', roomEpoch: 'fixture-room', sceneEpoch: 'fixture-control', sceneKind: 'TANK', serverTick: 1, serverTimeMs: Date.now(), ackInputSeq: 0, ackActionSeq: 0, controlledFishId: 'owned-visual', fish: [authoritativeFish, offlineFish], food: [], npc: [], pearl: null, match: null, ownRuntime: { stamina: 100, dashReadyAtServerMs: 0, shieldReadyAtServerMs: 0 } };
   main.setSnapshot(snapshot); main.setAppearancePreview(draft.value);
   let previewComponent: PreviewDebug | null = null;
   const previewApp = createApp({ render: () => h(FishPreview, { appearance: draft.value, nickname: authoritativeFish.nickname, ref: value => { previewComponent = value as unknown as PreviewDebug; }, onError: (message: string) => errors.push(message) }) });
@@ -36,7 +37,7 @@ export async function createM4RenderFixture(host: HTMLElement) {
   const original = JSON.stringify(authoritativeFish);
   return {
     errors,
-    status() { return { main: main.getDebugState().fish[0], preview: previewComponent?.getDebugState(), left: { preset: left.renderedPreset, skinStatus: left.skinStatus, nameScaleX: left.nameTag.scale.x, visualScaleX: left.visual.scale.x, nameWidth: left.nameBackground.width, textWidth: left.nameText.width }, right: { preset: right.renderedPreset, skinStatus: right.skinStatus, nameScaleX: right.nameTag.scale.x, visualScaleX: right.visual.scale.x }, errors: [...errors], authorityUnchanged: original === JSON.stringify(authoritativeFish) }; },
+    status() { const sceneFish = main.getDebugState().fish; return { main: sceneFish.find(value => value.id === authoritativeFish.id), offline: sceneFish.find(value => value.id === offlineFish.id), preview: previewComponent?.getDebugState(), left: { preset: left.renderedPreset, skinStatus: left.skinStatus, nameScaleX: left.nameTag.scale.x, visualScaleX: left.visual.scale.x, nameWidth: left.nameBackground.width, textWidth: left.nameText.width }, right: { preset: right.renderedPreset, skinStatus: right.skinStatus, nameScaleX: right.nameTag.scale.x, visualScaleX: right.visual.scale.x }, errors: [...errors], authorityUnchanged: original === JSON.stringify(authoritativeFish) }; },
     async setVariant(preset: PresetId, id: string | null) { draft.value = appearance(preset, id); main.setAppearancePreview(draft.value); left.setAppearance(draft.value); right.setAppearance(draft.value); await nextTick(); renderPair(); },
     repeatSnapshots() { return Array.from({ length: 10 }, () => { snapshot.serverTick++; snapshot.serverTimeMs = Date.now(); main.setSnapshot(snapshot); return main.getDebugState().fish[0]!.skinStatus; }); },
     setMainSkin(id: string | null) { main.setAppearancePreview(appearance('ray', id)); },

@@ -37,6 +37,7 @@
     "swimBounds": { "x": 64, "y": 96, "width": 1792, "height": 780 },
     "maxOnlinePlayers": 40,
     "maxIdleDisplays": 12,
+    "emptyRoomRetentionSeconds": 300,
     "maxNpc": 12,
     "npcTargetSilver": 8,
     "npcTargetAgile": 3,

@@ -16,6 +16,7 @@ try {
   async function status() { return page.evaluate(() => window.m4Fixture.status()); }
   async function ready() { await page.waitForFunction(() => { const s = window.m4Fixture.status(); return [s.main.skinStatus, s.preview.skinStatus, s.left.skinStatus, s.right.skinStatus].every(v => v === 'ready'); }); }
   await ready();
+  const presence = await status(); if (presence.offline.interactive || !presence.offline.presenceLabel || presence.offline.visualAlpha >= 0.6) throw new Error('Offline display fish is not visually distinct'); evidence.checks.push('offline display fish stays rendered and selectable while using a visible label and reduced opacity');
   if (evidence.requests['fixture-a'] !== 1) throw new Error('Shared texture request was not coalesced'); evidence.checks.push('extensionless asset URL decoded; main/preview/pair share one texture fetch');
   const snapshots = await page.evaluate(() => window.m4Fixture.repeatSnapshots()); if (snapshots.some(s => s !== 'ready')) throw new Error('Snapshot rebuilt or reset local try-on'); evidence.checks.push('10 authoritative snapshots preserve a loaded local try-on without rebuilding');
   await page.getByRole('button', { name: '预览向左游动' }).click(); if ((await status()).preview.facing !== -1) throw new Error('Preview left direction failed');
