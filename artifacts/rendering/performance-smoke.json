@@ -1,0 +1,56 @@
+{
+  "browser": "131.0.2903.86",
+  "renderer": "SwiftShader software WebGL",
+  "scope": "M1 local six-fish preview, not 30-user production performance",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "dpr": 2
+  },
+  "errors": [],
+  "records": [
+    {
+      "quality": "normal",
+      "stats": {
+        "fps": 2,
+        "frames": 5,
+        "avgFPS": 1.5,
+        "p95FrameMs": 1528.3,
+        "tickerCount": 1,
+        "entityCount": 6,
+        "quality": "normal",
+        "resolution": 2,
+        "frameSamples": 4
+      },
+      "movement": 228,
+      "elapsedMs": 1443
+    },
+    {
+      "quality": "low",
+      "stats": {
+        "fps": 2,
+        "frames": 16,
+        "avgFPS": 1.6,
+        "p95FrameMs": 2089.6,
+        "tickerCount": 1,
+        "entityCount": 6,
+        "quality": "low",
+        "resolution": 1.5,
+        "frameSamples": 15
+      },
+      "movement": 156,
+      "elapsedMs": 1003
+    }
+  ],
+  "cleanup": {
+    "fps": 2,
+    "frames": 19,
+    "avgFPS": 1.6,
+    "p95FrameMs": 2089.6,
+    "tickerCount": 0,
+    "entityCount": 0,
+    "quality": "low",
+    "resolution": 0,
+    "frameSamples": 18
+  }
+}

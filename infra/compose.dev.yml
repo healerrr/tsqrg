@@ -1,0 +1,20 @@
+name: aquarium-dev
+services:
+  db:
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_DB: aquarium
+      POSTGRES_USER: aquarium
+      POSTGRES_PASSWORD: ${LOCAL_DB_PASSWORD:-aquarium_dev}
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:${LOCAL_DB_PORT:-55432}:5432"
+    volumes:
+      - database-dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aquarium -d aquarium"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+volumes:
+  database-dev:

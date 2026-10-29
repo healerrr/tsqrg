@@ -1,0 +1,37 @@
+{
+  "name": "colleagues-in-the-tank",
+  "private": true,
+  "type": "module",
+  "version": "1.0.0",
+  "packageManager": "pnpm@9.15.5",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter './apps/*' dev",
+    "dev:web": "pnpm --filter @aquarium/web dev",
+    "dev:server": "pnpm --filter @aquarium/server dev",
+    "build": "pnpm -r --if-present build",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "eslint .",
+    "test": "vitest run tests/rules",
+    "test:integration": "tsx tests/integration/run.ts",
+    "test:e2e": "playwright test -c tests/e2e/playwright.config.ts",
+    "db:up": "docker compose -f infra/compose.dev.yml up -d db",
+    "db:local": "tsx infra/dev-db.ts",
+    "db:migrate": "pnpm --filter @aquarium/server db:migrate",
+    "db:seed": "pnpm --filter @aquarium/server db:seed",
+    "load:smoke": "tsx tests/load.ts"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@playwright/test": "1.56.1",
+    "@types/node": "24.10.1",
+    "embedded-postgres": "17.10.0-beta.17",
+    "eslint": "9.39.1",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.4",
+    "vitest": "3.2.4"
+  }
+}

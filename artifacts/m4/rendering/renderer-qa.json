@@ -1,0 +1,24 @@
+{
+  "browser": "131.0.2903.86",
+  "scope": "M4 renderer-only fixture; no purchase, inventory mutation or upload API",
+  "checks": [
+    "extensionless asset URL decoded; main/preview/pair share one texture fetch",
+    "10 authoritative snapshots preserve a loaded local try-on without rebuilding",
+    "FishPreview 44px DOM direction buttons operate both ways",
+    "all six presets render uploaded skin through exact body masks, flip internal parts only, and fit long nickname backgrounds",
+    "arena always renders locked authoritative appearance",
+    "cancel restores server appearance without changing its snapshot",
+    "cancel during image decode never applies a late skin or stale error",
+    "bad image response falls back to vector body and reports one error",
+    "390px preview fits viewport and left/right controls remain at least 44px",
+    "closing a fish or preview component preserves remaining shared texture users",
+    "last texture user and app destroy release texture cache, ticker and entities"
+  ],
+  "requests": {
+    "fixture-a": 1,
+    "slow-asset": 1,
+    "broken-asset": 1
+  },
+  "pageErrors": [],
+  "failure": null
+}

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "rendering": "self-hosted-code-native-vector",
+  "source": "为本项目自制的分层 PixiJS 矢量美术；参考图仅用于色彩和气质对照",
+  "license": "项目自有代码资源，随项目源码交付；未复制第三方图片像素",
+  "referenceOnly": "assets/reference/approved-color-block.png",
+  "scene": [
+    { "id": "tank.water.back", "source": "apps/web/src/game/scenery.ts", "size": [1920, 1080], "layers": ["water", "surface", "rays"] },
+    { "id": "tank.ruins.far", "source": "apps/web/src/game/scenery.ts", "layers": ["ruins", "decorative-fish"] },
+    { "id": "tank.plants.mid", "source": "apps/web/src/game/scenery.ts", "layers": ["stone", "seagrass"] },
+    { "id": "tank.coral.front", "source": "apps/web/src/game/scenery.ts", "layers": ["sand", "coral", "sponge", "starfish", "pebbles"] },
+    { "id": "arena.duel", "source": "apps/web/src/game/scenery.ts", "size": [1280, 720] },
+    { "id": "arena.team", "source": "apps/web/src/game/scenery.ts", "size": [1600, 900] },
+    { "id": "objective.pearl", "source": "apps/web/src/game/aquarium.ts", "size": [64, 64] }
+  ],
+  "fish": [
+    { "id": "goldfish", "source": "apps/web/src/game/fish.ts", "pivot": [0, 0], "face": [24, -9], "head": [0, -42], "charm": [-12, 35], "trail": [-95, 0] },
+    { "id": "clownfish", "source": "apps/web/src/game/fish.ts", "pivot": [0, 0], "face": [27, -7], "head": [2, -35], "charm": [-10, 31], "trail": [-90, 0] },
+    { "id": "puffer", "source": "apps/web/src/game/fish.ts", "pivot": [0, 0], "face": [20, -11], "head": [-1, -45], "charm": [-15, 38], "trail": [-82, 0] },
+    { "id": "betta", "source": "apps/web/src/game/fish.ts", "pivot": [0, 0], "face": [22, -7], "head": [0, -35], "charm": [-8, 31], "trail": [-136, 0] },
+    { "id": "angelfish", "source": "apps/web/src/game/fish.ts", "pivot": [0, 0], "face": [24, -8], "head": [-3, -44], "charm": [-8, 39], "trail": [-90, 0] },
+    { "id": "ray", "source": "apps/web/src/game/fish.ts", "pivot": [0, 0], "face": [18, -7], "head": [0, -29], "charm": [-20, 30], "trail": [-126, 0] }
+  ],
+  "parts": ["tail", "rear-fins", "body", "pattern-or-skin-mask", "front-fin", "eyes", "mouth", "accessories"],
+  "states": ["idle", "swim", "dash", "eat", "hit", "victory", "defeat", "bubble"],
+  "accessories": [
+    { "id": "glasses.round", "anchor": "face", "z": "above-eyes" },
+    { "id": "headphones.basic", "anchor": "head", "z": "above-body" },
+    { "id": "hat.fish", "anchor": "head", "z": "above-body" },
+    { "id": "outfit.pirate", "anchor": "head-and-face", "z": "above-eyes", "occludes": ["one-eye"] },
+    { "id": "trail.star", "anchor": "tail", "z": "behind-body" },
+    { "id": "charm.seagrass", "anchor": "charm", "z": "above-body" }
+  ],
+  "validation": "需以实际运行截图和逐鱼型左右预览验证；manifest 不代表美术验收已通过",
+  "collision": "仅采用共享规则的服务器世界判定；美术变形和贴图不改变碰撞体"
+}

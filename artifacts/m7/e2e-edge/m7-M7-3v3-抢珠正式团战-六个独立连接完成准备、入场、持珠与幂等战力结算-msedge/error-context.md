@@ -1,0 +1,125 @@
+# Page snapshot
+
+```yaml
+- main [ref=e3]:
+  - generic "可操作的公共水族箱" [ref=e4]:
+    - img "公共水族箱：点按游动，方向键或 WASD 移动，空格冲刺，E 护盾" [ref=e5]
+  - generic:
+    - link "同事请入缸首页" [ref=e6] [cursor=pointer]:
+      - /url: /
+      - img [ref=e8]
+      - generic [ref=e15]:
+        - text: 同事请入缸
+        - generic [ref=e16]: 工作之外，一起摸鱼。
+    - generic [ref=e17]:
+      - generic [ref=e18]: 在线 7 / 40
+      - button "开启声音" [ref=e20] [cursor=pointer]:
+        - img [ref=e21]
+      - button "设置" [ref=e25] [cursor=pointer]:
+        - img [ref=e26]
+  - complementary "本地场景说明" [ref=e29]:
+    - button "战力榜" [ref=e30] [cursor=pointer]:
+      - generic [ref=e31]:
+        - img [ref=e32]
+        - text: 战力榜
+      - img [ref=e34]
+    - generic [ref=e36]:
+      - button "1 群游验收丙 900" [ref=e37] [cursor=pointer]:
+        - generic [ref=e38]: "1"
+        - img [ref=e39]
+        - generic [ref=e45]: 群游验收丙
+        - strong [ref=e46]: "900"
+      - button "2 群游验收丙 900" [ref=e47] [cursor=pointer]:
+        - generic [ref=e48]: "2"
+        - img [ref=e49]
+        - generic [ref=e55]: 群游验收丙
+        - strong [ref=e56]: "900"
+      - button "3 群游验收丙 900" [ref=e57] [cursor=pointer]:
+        - generic [ref=e58]: "3"
+        - img [ref=e59]
+        - generic [ref=e65]: 群游验收丙
+        - strong [ref=e66]: "900"
+      - paragraph [ref=e67]: 我的战力 520 · 可用 420
+    - button "认识这个水族箱" [ref=e68] [cursor=pointer]:
+      - text: 认识这个水族箱
+      - img [ref=e69]
+  - generic [ref=e72]: 六种鱼型 · 自由游动
+  - generic [ref=e74]:
+    - img [ref=e75]
+    - generic [ref=e77]: 点按水面游动
+    - img [ref=e79]
+    - generic [ref=e81]: WASD 移动 / 空格冲刺
+  - button "查看我的鱼" [ref=e82] [cursor=pointer]:
+    - img [ref=e84]
+    - generic [ref=e90]:
+      - generic [ref=e91]: 团战甲一29 你
+      - generic [ref=e92]: Lv.1 · 金鱼 · 同事
+  - navigation "主菜单" [ref=e94]:
+    - button "投喂" [ref=e95] [cursor=pointer]:
+      - img [ref=e97]
+      - generic [ref=e100]: 投喂
+    - button "我的鱼" [ref=e101] [cursor=pointer]:
+      - img [ref=e103]
+      - generic [ref=e109]: 我的鱼
+    - button "商城" [ref=e111] [cursor=pointer]:
+      - img [ref=e113]
+      - generic [ref=e116]: 商城
+    - button "鱼群组织" [ref=e117] [cursor=pointer]:
+      - img [ref=e119]
+      - generic [ref=e124]: 鱼群组织
+    - button "竞技场" [ref=e125] [cursor=pointer]:
+      - img [ref=e127]
+      - generic [ref=e133]: 竞技场
+  - button "冲刺" [ref=e135] [cursor=pointer]:
+    - img [ref=e136]
+    - generic [ref=e138]: 冲刺 空格
+  - generic [ref=e139]: 珊瑚海 · 慢一点，也没关系
+  - dialog "水族箱面板" [active] [ref=e141]:
+    - button "关闭面板" [ref=e142] [cursor=pointer]:
+      - img [ref=e143]
+    - generic [ref=e146]:
+      - img [ref=e147]
+      - text: 偶尔，也要认真一下
+    - heading "来一场水下对决" [level=1] [ref=e153]
+    - paragraph [ref=e154]: 冲刺攻击，护盾防守。正式赛每位玩家都独立确认风险。
+    - generic [ref=e155]:
+      - generic [ref=e156]: 比赛已完成
+      - generic [ref=e157]: 正式赛 · 统一押注 20
+    - generic [ref=e158]:
+      - generic [ref=e159]:
+        - img [ref=e160]
+        - generic [ref=e166]: 团战甲二c9
+        - generic [ref=e167]: ◆ A队 · 已确认
+      - generic [ref=e168]:
+        - img [ref=e169]
+        - generic [ref=e175]: 团战甲三f5
+        - generic [ref=e176]: ◆ A队 · 已确认
+      - generic [ref=e177]:
+        - img [ref=e178]
+        - generic [ref=e184]: 团战甲一29
+        - generic [ref=e185]: ◆ A队 · 已确认
+      - generic [ref=e186]:
+        - img [ref=e187]
+        - generic [ref=e193]: 团战乙一dc
+        - generic [ref=e194]: ● B队 · 已确认
+      - generic [ref=e195]:
+        - img [ref=e196]
+        - generic [ref=e202]: 团战乙三a0
+        - generic [ref=e203]: ● B队 · 已确认
+      - generic [ref=e204]:
+        - img [ref=e205]
+        - generic [ref=e211]: 团战乙二8c
+        - generic [ref=e212]: ● B队 · 已确认
+    - generic [ref=e213]:
+      - heading "比赛结束" [level=3] [ref=e214]
+      - paragraph [ref=e215]: FORFEIT · 押注 20
+      - paragraph [ref=e216]: 2ec8205a-cdd4-4be1-81d3-b5c90cbee2bc：+20 战力
+      - paragraph [ref=e217]: 3fb8a808-0a92-418a-9be4-e2f4ee20db53：-20 战力
+      - paragraph [ref=e218]: 5b3c5160-3fba-449c-b2d8-8e6b9881844c：+20 战力
+      - paragraph [ref=e219]: 6ee16db1-82f2-4773-902e-8dc2503ee698：-20 战力
+      - paragraph [ref=e220]: d3ef2b85-8f3b-448a-8ad2-f2bec61fbfed：-20 战力
+      - paragraph [ref=e221]: 你：+20 战力
+    - button "回到主缸" [ref=e223] [cursor=pointer]
+    - group [ref=e224]:
+      - generic "真实历史战绩" [ref=e225] [cursor=pointer]
+```

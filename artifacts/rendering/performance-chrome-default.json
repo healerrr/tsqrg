@@ -1,0 +1,85 @@
+{
+  "browser": "155.0.8059.86",
+  "channel": "chrome",
+  "mode": "default",
+  "launchArgs": [
+    "--enable-webgl"
+  ],
+  "scope": "M1 local six-fish preview, not 30-user production performance",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "dpr": 2
+  },
+  "adapter": {
+    "renderer": "ANGLE (NVIDIA, NVIDIA Quadro M2000M (0x000013B0) Direct3D11 vs_5_0 ps_5_0, D3D11)",
+    "vendor": "Google Inc. (NVIDIA)",
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+  },
+  "errors": [],
+  "records": [
+    {
+      "quality": "normal",
+      "profile": "full-ui",
+      "stats": {
+        "fps": 60,
+        "frames": 241,
+        "avgFPS": 60,
+        "p95FrameMs": 16.9,
+        "tickerCount": 1,
+        "entityCount": 6,
+        "quality": "normal",
+        "resolution": 2,
+        "frameSamples": 240
+      },
+      "movement": 130.17421923986308,
+      "elapsedMs": 844
+    },
+    {
+      "quality": "normal",
+      "profile": "canvas-only",
+      "stats": {
+        "fps": 60,
+        "frames": 240,
+        "avgFPS": 60,
+        "p95FrameMs": 16.8,
+        "tickerCount": 1,
+        "entityCount": 6,
+        "quality": "normal",
+        "resolution": 2,
+        "frameSamples": 239
+      },
+      "movement": 129.90498682866792,
+      "elapsedMs": 838
+    },
+    {
+      "quality": "low",
+      "profile": "canvas-only",
+      "stats": {
+        "fps": 60,
+        "frames": 241,
+        "avgFPS": 60,
+        "p95FrameMs": 16.9,
+        "tickerCount": 1,
+        "entityCount": 6,
+        "quality": "low",
+        "resolution": 1.5,
+        "frameSamples": 240
+      },
+      "movement": 129.69072731141569,
+      "elapsedMs": 831
+    }
+  ],
+  "cleanup": {
+    "fps": 60,
+    "frames": 291,
+    "avgFPS": 60,
+    "p95FrameMs": 16.9,
+    "tickerCount": 0,
+    "entityCount": 0,
+    "quality": "low",
+    "resolution": 0,
+    "frameSamples": 290
+  },
+  "failure": null
+}

@@ -1,0 +1,510 @@
+{
+  "browser": "131.0.2903.86",
+  "errors": [],
+  "checks": [
+    {
+      "preset": "goldfish",
+      "item": "glasses.round",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "goldfish",
+      "item": "glasses.round",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "goldfish",
+      "item": "headphones.basic",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "goldfish",
+      "item": "headphones.basic",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "goldfish",
+      "item": "hat.fish",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "goldfish",
+      "item": "hat.fish",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "goldfish",
+      "item": "outfit.pirate",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "goldfish",
+      "item": "outfit.pirate",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "goldfish",
+      "item": "trail.star",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "goldfish",
+      "item": "trail.star",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "goldfish",
+      "item": "charm.seagrass",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "goldfish",
+      "item": "charm.seagrass",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "glasses.round",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "glasses.round",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "headphones.basic",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "headphones.basic",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "hat.fish",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "hat.fish",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "outfit.pirate",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "outfit.pirate",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "trail.star",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "trail.star",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "charm.seagrass",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "clownfish",
+      "item": "charm.seagrass",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "glasses.round",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "glasses.round",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "headphones.basic",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "headphones.basic",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "hat.fish",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "hat.fish",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "outfit.pirate",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "outfit.pirate",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "trail.star",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "trail.star",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "charm.seagrass",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "puffer",
+      "item": "charm.seagrass",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "glasses.round",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "glasses.round",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "headphones.basic",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "headphones.basic",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "hat.fish",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "hat.fish",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "outfit.pirate",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "outfit.pirate",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "trail.star",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "trail.star",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "charm.seagrass",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "betta",
+      "item": "charm.seagrass",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "glasses.round",
+      "facing": "left",
+      "visualScaleX": -0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "glasses.round",
+      "facing": "right",
+      "visualScaleX": 0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "headphones.basic",
+      "facing": "left",
+      "visualScaleX": -0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "headphones.basic",
+      "facing": "right",
+      "visualScaleX": 0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "hat.fish",
+      "facing": "left",
+      "visualScaleX": -0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "hat.fish",
+      "facing": "right",
+      "visualScaleX": 0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "outfit.pirate",
+      "facing": "left",
+      "visualScaleX": -0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "outfit.pirate",
+      "facing": "right",
+      "visualScaleX": 0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "trail.star",
+      "facing": "left",
+      "visualScaleX": -0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "trail.star",
+      "facing": "right",
+      "visualScaleX": 0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "charm.seagrass",
+      "facing": "left",
+      "visualScaleX": -0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "angelfish",
+      "item": "charm.seagrass",
+      "facing": "right",
+      "visualScaleX": 0.65,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "glasses.round",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "glasses.round",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "headphones.basic",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "headphones.basic",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "hat.fish",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "hat.fish",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "outfit.pirate",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "outfit.pirate",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "trail.star",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "trail.star",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "charm.seagrass",
+      "facing": "left",
+      "visualScaleX": -0.76,
+      "labelScaleX": 1
+    },
+    {
+      "preset": "ray",
+      "item": "charm.seagrass",
+      "facing": "right",
+      "visualScaleX": 0.76,
+      "labelScaleX": 1
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "browser": "131.0.2903.86",
+  "channel": "msedge",
+  "mode": "software",
+  "launchArgs": [
+    "--use-angle=swiftshader",
+    "--enable-webgl",
+    "--enable-unsafe-swiftshader"
+  ],
+  "scope": "M1 local six-fish preview, not 30-user production performance",
+  "viewport": {
+    "width": 1280,
+    "height": 720,
+    "dpr": 2
+  },
+  "adapter": {
+    "renderer": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)",
+    "vendor": "Google Inc. (Google)",
+    "version": "WebGL 2.0 (OpenGL ES 3.0 Chromium)"
+  },
+  "errors": [],
+  "records": [
+    {
+      "quality": "normal",
+      "profile": "full-ui",
+      "stats": {
+        "fps": 1,
+        "frames": 6,
+        "avgFPS": 1.4,
+        "p95FrameMs": 825.3,
+        "tickerCount": 1,
+        "entityCount": 6,
+        "quality": "normal",
+        "resolution": 2,
+        "frameSamples": 5
+      },
+      "movement": 18,
+      "elapsedMs": 842
+    }
+  ],
+  "cleanup": null,
+  "failure": "Error: Quality/physics assertion failed: {\"quality\":\"normal\",\"profile\":\"full-ui\",\"stats\":{\"fps\":1,\"frames\":6,\"avgFPS\":1.4,\"p95FrameMs\":825.3,\"tickerCount\":1,\"entityCount\":6,\"quality\":\"normal\",\"resolution\":2,\"frameSamples\":5},\"movement\":18,\"elapsedMs\":842}\n    at file:///C:/Users/Thinkpad%20User/Desktop/%E5%90%8C%E4%BA%8B%E8%AF%B7%E5%85%A5%E7%BC%B8/tests/render-performance.mjs:35:179"
+}

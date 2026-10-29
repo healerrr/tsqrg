@@ -1,0 +1,111 @@
+{
+  "recordedAt": "2026-10-27T03:53:35.421Z",
+  "browser": "131.0.2903.86",
+  "rulesVersion": "1.0.0",
+  "offlineObserved": true,
+  "onlineAgain": true,
+  "instanceBefore": {
+    "instanceId": "f91f839b-1c60-4ff2-b279-d7e764d85a08",
+    "uptimeSeconds": 1287.2807169,
+    "connections": 1,
+    "rooms": 1,
+    "serverTick": 24213,
+    "tickP95Ms": 0.02729999995790422,
+    "memory": {
+      "rss": 104386560,
+      "heapTotal": 28168192,
+      "heapUsed": 25793920,
+      "external": 4572253,
+      "arrayBuffers": 1315935
+    }
+  },
+  "instanceAfter": {
+    "instanceId": "67f80c84-2c44-49e7-9b3b-3184370767f1",
+    "uptimeSeconds": 46.5010936,
+    "connections": 1,
+    "rooms": 1,
+    "serverTick": 43,
+    "tickP95Ms": 0.11869999999908032,
+    "memory": {
+      "rss": 106512384,
+      "heapTotal": 43634688,
+      "heapUsed": 26155920,
+      "external": 4365426,
+      "arrayBuffers": 1123689
+    }
+  },
+  "before": {
+    "userId": "6c45eab1-8833-4ed6-9eb2-8be196af8873",
+    "role": "GUEST",
+    "fishId": "a78944e7-d30b-4103-a67a-44244a4bc912",
+    "nickname": "重启验证",
+    "totalXp": 0,
+    "level": 1,
+    "appearance": {
+      "version": 1,
+      "equipped": {},
+      "finColor": "#539bec",
+      "presetId": "goldfish",
+      "bodyColor": "#ffaa45",
+      "patternId": "none",
+      "skinAssetId": null
+    },
+    "guildId": null,
+    "currentMatchId": null,
+    "wallet": {
+      "basePower": 100,
+      "powerBalance": 100,
+      "heldPower": 0,
+      "availablePower": 100,
+      "totalPower": 200,
+      "highestPower": 200,
+      "version": 2
+    },
+    "businessDate": "2026-10-27",
+    "daily": {
+      "xpMinted": 0,
+      "powerMinted": 0,
+      "feedUsed": 0,
+      "formalUsed": 0,
+      "formalReserved": 0
+    }
+  },
+  "after": {
+    "userId": "6c45eab1-8833-4ed6-9eb2-8be196af8873",
+    "role": "GUEST",
+    "fishId": "a78944e7-d30b-4103-a67a-44244a4bc912",
+    "nickname": "重启验证",
+    "totalXp": 0,
+    "level": 1,
+    "appearance": {
+      "version": 1,
+      "equipped": {},
+      "finColor": "#539bec",
+      "presetId": "goldfish",
+      "bodyColor": "#ffaa45",
+      "patternId": "none",
+      "skinAssetId": null
+    },
+    "guildId": null,
+    "currentMatchId": null,
+    "wallet": {
+      "basePower": 100,
+      "powerBalance": 100,
+      "heldPower": 0,
+      "availablePower": 100,
+      "totalPower": 200,
+      "highestPower": 200,
+      "version": 2
+    },
+    "businessDate": "2026-10-27",
+    "daily": {
+      "xpMinted": 0,
+      "powerMinted": 0,
+      "feedUsed": 0,
+      "formalUsed": 0,
+      "formalReserved": 0
+    }
+  },
+  "secretHandling": "Cookie仅保留在本次测试浏览器内存；未写入文件",
+  "screenshot": "artifacts/m2/after-server-restart.png"
+}
