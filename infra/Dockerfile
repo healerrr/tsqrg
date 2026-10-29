@@ -14,7 +14,7 @@ ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 UPLOAD_DIR=/data/uploads
 RUN mkdir -p /data/uploads && chown -R node:node /data /app
 USER node
 EXPOSE 3000
-CMD ["sh", "-c", "pnpm db:migrate && pnpm db:seed && pnpm --filter @aquarium/server start"]
+CMD ["sh", "-c", "pnpm db:migrate && pnpm db:seed && exec node --import tsx apps/server/src/index.ts"]
 
 FROM nginx:1.28.0-alpine AS web
 COPY --from=build /app/apps/web/dist /usr/share/nginx/html

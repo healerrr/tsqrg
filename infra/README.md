@@ -28,6 +28,8 @@ pnpm dev
 
 生产启动会在连接数据库前校验全部必要环境变量：`APP_ORIGIN` 必须是无额外路径的 HTTPS 来源，`UPLOAD_DIR` 必须是非根目录绝对路径，业务时区固定为 `Asia/Shanghai`，`RULES_VERSION` 必须与构建内配置一致，端口与日志级别必须有效。任何一项缺失或不一致都会直接拒绝启动，不回退到开发默认值。
 
+`OPERATIONS_CHECK_INTERVAL_MS` 允许 10000—3600000 的整数，默认 60000；`SHUTDOWN_DRAIN_MS` 允许 0—35000，默认 35000。无效计时参数会拒绝启动。容器在迁移和种子完成后直接以 Node 作为主进程接收 SIGTERM，配合 45 秒停止宽限执行比赛排空。
+
 Docker 生产配置未在当前无 Docker 的 Windows 环境执行；不能仅凭配置文件存在将 OPS03 标为通过。首次生产使用前须按本节从空数据库复现、确认迁移/种子和同域上传、HTTP、WebSocket，并记录结果。
 
 不要将 `game` 扩容为多个权威实例。数据库 advisory lock 作为最后防线拒绝第二实例，主锁丢失时应停止资产写入并使 readiness 失败。没有房间调度的首版不支持多节点并行模拟。

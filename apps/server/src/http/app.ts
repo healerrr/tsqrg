@@ -1,5 +1,4 @@
 import { timingSafeEqual } from 'node:crypto';
-import { isAbsolute, parse, resolve } from 'node:path';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
@@ -20,30 +19,18 @@ import { registerMatchRoutes } from './matches';
 import { registerGuildRoutes } from './guilds';
 import { registerAdminRoutes } from './admin';
 import { installBattles } from '../simulation/battle';
+import { readRuntimeConfig } from '../runtime-config';
 
 declare module 'fastify' { interface FastifyRequest { userId: string | null } }
 
 export async function createApp() {
-  const production = process.env.NODE_ENV === 'production';
+  const runtime = readRuntimeConfig();
+  const { production } = runtime;
   const metricsToken = process.env.OPS_METRICS_TOKEN ?? '';
-  if (production) {
-    const required=['HOST','PORT','DATABASE_URL','APP_ORIGIN','SESSION_SECRET','UPLOAD_DIR','GAME_TIMEZONE','RULES_VERSION','LOG_LEVEL','OPS_METRICS_TOKEN'] as const;
-    const missing=required.filter(name=>!process.env[name]);
-    if(missing.length)throw new Error(`生产环境缺少必要变量：${missing.join('、')}`);
-    if(process.env.SESSION_SECRET!.length<32||metricsToken.length<24)throw new Error('生产环境 SESSION_SECRET 至少32字符，OPS_METRICS_TOKEN 至少24字符');
-    const port=Number(process.env.PORT),origin=new URL(process.env.APP_ORIGIN!);
-    if(!Number.isInteger(port)||port<1||port>65535)throw new Error('生产环境 PORT 必须是1—65535的整数');
-    if(origin.protocol!=='https:'||origin.pathname!=='/'||origin.search||origin.hash||origin.username||origin.password)throw new Error('生产环境 APP_ORIGIN 必须是无凭据、路径、查询或片段的 HTTPS 同域来源');
-    const uploadPath=resolve(process.env.UPLOAD_DIR!);
-    if(!isAbsolute(process.env.UPLOAD_DIR!)||uploadPath===parse(uploadPath).root)throw new Error('生产环境 UPLOAD_DIR 必须是非根目录的绝对路径');
-    if(process.env.GAME_TIMEZONE!=='Asia/Shanghai')throw new Error('首版生产业务时区必须是 Asia/Shanghai');
-    if(process.env.RULES_VERSION!==config.rulesVersion)throw new Error(`生产规则版本必须与构建配置一致：${config.rulesVersion}`);
-    if(!['fatal','error','warn','info','debug','trace','silent'].includes(process.env.LOG_LEVEL!))throw new Error('生产环境 LOG_LEVEL 无效');
-  }
 
   const app = Fastify({
     logger: {
-      level: process.env.LOG_LEVEL ?? 'info',
+      level: runtime.logLevel,
       redact: ['req.headers.cookie', 'req.headers.authorization', 'req.body.inviteCode', 'res.headers.set-cookie'],
     },
     bodyLimit: config.upload.maxBytes + 65536,
@@ -300,7 +287,7 @@ export async function createApp() {
 
   let outboxTimer: ReturnType<typeof setInterval> | null = null;
   let operationsTimer: ReturnType<typeof setInterval> | null = null;
-  let outboxRunning = false, operationsRunning = false, authoritativeStarted = false;
+  let outboxRunning = false, operationsRunning = false, authoritativeStarted = false, shuttingDown = false;
   async function drainOutbox() {
     if (outboxRunning) return;
     outboxRunning = true;
@@ -314,14 +301,14 @@ export async function createApp() {
     finally { outboxRunning = false; }
   }
   async function operationalCheck() {
-    if (operationsRunning) return;
+    if (operationsRunning || shuttingDown) return;
     operationsRunning = true;
     try {
       await pool.query('SELECT 1');
       const report = await reconcile();
       await enforceReconciliation(report);
       resumeAssetWrites('database');
-      if (authoritativeStarted) setReady(true);
+      if (authoritativeStarted && !shuttingDown) setReady(true);
       for (const [bucketKey, bucket] of mutationBuckets) if (bucket.second < Math.floor(Date.now() / 1000) - 60) mutationBuckets.delete(bucketKey);
     } catch (error) {
       pauseAssetWrites('database', '数据库探测或对账执行失败');
@@ -340,23 +327,22 @@ export async function createApp() {
     resumeAssetWrites('database');
     matches.start(); world.start();
     outboxTimer = setInterval(() => { void drainOutbox(); }, 500);
-    const operationsInterval = Math.max(10000, Number(process.env.OPERATIONS_CHECK_INTERVAL_MS ?? 60000));
-    operationsTimer = setInterval(() => { void operationalCheck(); }, operationsInterval);
-    await app.listen({ port: Number(process.env.PORT ?? 3000), host: process.env.HOST ?? '127.0.0.1' });
+    operationsTimer = setInterval(() => { void operationalCheck(); }, runtime.operationsIntervalMs);
+    await app.listen({ port: runtime.port, host: runtime.host });
     setReady(true);
   }
 
   let closePromise: Promise<void> | null = null;
   function close(): Promise<void> {
     if (closePromise) return closePromise;
+    shuttingDown = true;
     closePromise = (async () => {
       const shouldFlushOutbox = authoritativeStarted || outboxTimer !== null;
       setReady(false);
       pauseAssetWrites('maintenance', '服务器正在有界排空并停止');
       matches.beginDrain();
       if (operationsTimer) { clearInterval(operationsTimer); operationsTimer = null; }
-      const drainMs = Math.max(0, Math.min(60000, Number(process.env.SHUTDOWN_DRAIN_MS ?? 35000)));
-      const deadline = Date.now() + drainMs;
+      const deadline = Date.now() + runtime.shutdownDrainMs;
       if (authoritativeStarted) {
         while (Date.now() < deadline) {
           const active = await pool.query("SELECT count(*)::int AS count FROM matches WHERE status IN ('COUNTDOWN','RUNNING','OVERTIME','SETTLING')").catch(error => { app.log.error({ err: error }, '排空期间数据库不可用，立即进入本地关闭'); return null; });
