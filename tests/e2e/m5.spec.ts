@@ -93,7 +93,7 @@ test.describe('M5 真实1v1、押注与权威竞技',()=>{
       expect(finalA.wallet).toMatchObject({powerBalance:420,heldPower:0,availablePower:420});expect(finalB.wallet).toMatchObject({powerBalance:380,heldPower:0,availablePower:380});
       const reads=await Promise.all(Array.from({length:10},()=>api<any>(aContext,`/matches/${matchId}`)));expect(reads.every(r=>r.result?.reason==='FORFEIT')).toBe(true);
       expect((await api<SelfView>(aContext,'/me')).wallet.powerBalance).toBe(420);expect((await api<SelfView>(bContext,'/me')).wallet.powerBalance).toBe(380);
-      const history=await api<MatchResultView[]>(aContext,'/matches/history');expect(history.some(result=>result.matchId===matchId&&result.reason==='FORFEIT')).toBe(true);
+      const history=await api<{items:MatchResultView[]}>(aContext,'/matches/history');expect(history.items.some(result=>result.matchId===matchId&&result.reason==='FORFEIT')).toBe(true);
       const resultCount=(await pool.query('SELECT count(*)::int AS n FROM match_results WHERE match_id=$1',[matchId])).rows[0].n;expect(resultCount).toBe(1);
       const settlementCount=(await pool.query('SELECT count(*)::int AS n FROM ledger_transactions WHERE source_key=$1',[`match:${matchId}:settle`])).rows[0].n;expect(settlementCount).toBe(1);
     }finally{await aContext.close();await bContext.close();await pool.end();}

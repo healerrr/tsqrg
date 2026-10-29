@@ -7,11 +7,12 @@ export async function getInventory(userId:string){
   const result=await pool.query('SELECT s.*,i.acquired_at FROM inventory i JOIN shop_items s ON s.id=i.item_id WHERE i.user_id=$1 ORDER BY i.acquired_at,s.id',[userId]);
   return {itemIds:result.rows.map(row=>row.id as string),items:result.rows};
 }
-export async function getShopItems(userId:string,scope:'PERSONAL'|'GUILD'='PERSONAL'){
+export async function getShopItems(userId:string,scope:'PERSONAL'|'GUILD'='PERSONAL',offset=0,limit=20){
   const result=await pool.query(`SELECT s.*,CASE WHEN s.scope='PERSONAL' THEN EXISTS(SELECT 1 FROM inventory i WHERE i.user_id=$1 AND i.item_id=s.id)
     ELSE EXISTS(SELECT 1 FROM guild_assets a JOIN guild_members gm ON gm.guild_id=a.guild_id WHERE gm.user_id=$1 AND a.item_id=s.id) END AS owned
-    FROM shop_items s WHERE s.scope=$2 ORDER BY s.price,s.id`,[userId,scope]);
-  return result.rows;
+    FROM shop_items s WHERE s.scope=$2 ORDER BY s.price,s.id OFFSET $3 LIMIT $4`,[userId,scope,Math.max(0,offset),Math.min(100,Math.max(1,limit))+1]);
+  const pageSize=Math.min(100,Math.max(1,limit));
+  return {items:result.rows.slice(0,pageSize),nextCursor:result.rows.length>pageSize?String(Math.max(0,offset)+pageSize):null};
 }
 export async function purchaseItem(userId:string,key:string,payload:{itemId:string;itemVersion:number}){
   return durable(userId,'shop:purchase',key,payload,async client=>{

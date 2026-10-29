@@ -4,8 +4,8 @@ import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import { Server } from 'socket.io';
 import { ZodError } from 'zod';
-import { claimInviteSchema, createFishSchema } from '@aquarium/protocol';
-import { config } from '@aquarium/core';
+import { claimInviteSchema, createFishSchema, uuidSchema, type MatchMode, type MatchResultView, type PublicPlayerCard } from '@aquarium/protocol';
+import { basePower, config, levelFromXp } from '@aquarium/core';
 import { pool, ready, setReady, acquireMainInstance, releaseMainInstance, ownerEpoch } from '../persistence/db';
 import { createGuest, createFish, claimInvite, selfView, userFromToken } from '../services/identity';
 import { durable, hash } from '../services/economy';
@@ -239,6 +239,32 @@ export async function createApp() {
     return ok([...world.players.entries()]
       .filter(([, other]) => other.roomId === player?.roomId && other.disconnectedAt === null)
       .map(([id, other]) => ({ userId: id, fishId: other.fish.id, nickname: other.self.nickname, role: other.self.role, guildId: other.self.guildId, totalPower: other.self.wallet.totalPower, currentMatchId: other.self.currentMatchId })), request.id);
+  });
+  app.get<{Params:{fishId:string}}>('/api/v1/players/:fishId/card', async request => {
+    auth(request);
+    const fishId=uuidSchema.parse(request.params.fishId);
+    const player=await pool.query(`SELECT u.id AS user_id,u.role,f.id AS fish_id,f.nickname,f.total_xp,w.balance,
+      g.id AS guild_id,g.name AS guild_name,g.badge AS guild_badge,g.color AS guild_color,
+      (SELECT m.id FROM matches m JOIN match_participants mp ON mp.match_id=m.id WHERE mp.user_id=u.id
+        AND m.status IN ('INVITED','READY_CHECK','COUNTDOWN','RUNNING','OVERTIME','SETTLING') ORDER BY m.created_at DESC LIMIT 1) AS current_match_id
+      FROM fish f JOIN users u ON u.id=f.user_id JOIN wallets w ON w.owner_user_id=u.id
+      LEFT JOIN guild_members gm ON gm.user_id=u.id LEFT JOIN guilds g ON g.id=gm.guild_id AND g.status='ACTIVE'
+      WHERE f.id=$1`,[fishId]);
+    assert(player.rowCount,'FISH_NOT_OWNED','角色不存在',404);
+    const row=player.rows[0],level=levelFromXp(row.total_xp);
+    const recent=await pool.query(`SELECT r.result_json,p.team FROM match_results r JOIN match_participants p ON p.match_id=r.match_id
+      WHERE p.user_id=$1 ORDER BY r.created_at DESC,r.match_id DESC LIMIT 5`,[row.user_id]);
+    const data:PublicPlayerCard={
+      userId:row.user_id,fishId:row.fish_id,nickname:row.nickname,role:row.role,level,totalPower:basePower(level)+row.balance,
+      guild:row.guild_id?{id:row.guild_id,name:row.guild_name,badge:row.guild_badge,color:row.guild_color}:null,
+      currentMatchId:row.current_match_id??null,
+      recentMatches:recent.rows.map(entry=>{
+        const result=entry.result_json as MatchResultView;
+        const outcome=result.phase==='ABORTED'?'ABORTED':result.winnerTeam===null?'DRAW':result.winnerTeam===entry.team?'WIN':'LOSS';
+        return {matchId:result.matchId,mode:result.mode as MatchMode,outcome,reason:result.reason,committedAt:result.committedAt};
+      }),
+    };
+    return ok(data,request.id);
   });
 
   let outboxTimer: ReturnType<typeof setInterval> | null = null;

@@ -8,7 +8,7 @@ import { useSession } from '../stores/session';
 import FishPreview from './FishPreview.vue';
 import AdminPanel from './AdminPanel.vue';
 import ArenaPanel from './ArenaPanel.vue';
-const props=defineProps<{panel:string;presets:{id:PresetId;name:string;tag:string;color:string}[];colors:string[];appearance:Appearance}>();
+const props=defineProps<{panel:string;presets:{id:PresetId;name:string;tag:string;color:string}[];colors:string[];appearance:Appearance;arenaTargetUserId?:string}>();
 const emit=defineEmits<{preview:[Appearance];close:[];toast:[string]}>();
 const session=useSession();
 const loading=ref(false),busy=ref(false),error=ref(''),nickname=ref(''),inviteCode=ref(''),surfaceX=ref(960),tab=ref('all');
@@ -16,7 +16,7 @@ const draft=ref<Appearance>(structuredClone({...props.appearance,equipped:{...pr
 const inventory=ref<string[]>([]),shopItems=ref<any[]>([]),ranking=ref<any[]>([]),rankKind=ref('power');
 const rankMeta=ref<{myRank:number|null;nextCursor:string|null}>({myRank:null,nextCursor:null});
 const purchase=ref<any|null>(null),players=ref<any[]>([]),guilds=ref<any[]>([]),guild=ref<any|null>(null);
-const guildName=ref(''),notice=ref(''),donation=ref(10);
+const guildName=ref(''),guildSearch=ref(''),guildNext=ref<string|null>(null),ledgerNext=ref<string|null>(null),notice=ref(''),donation=ref(10);
 const guildConfirm=ref<{kind:'donate'|'dissolve';text:string}|null>(null);
 const productIcons:Record<string,any>={'glasses.round':Glasses,'headphones.basic':Headphones,'hat.fish':Crown,'outfit.pirate':Flag,'trail.star':Sparkles,'charm.seagrass':Leaf};
 const owned=computed(()=>new Set(inventory.value));
@@ -39,8 +39,8 @@ async function load(){
     }
     if(props.panel==='rank'){const r=await api<any>(rankUrl());ranking.value=rows(r);rankMeta.value={myRank:r.myRank,nextCursor:r.nextCursor};}
     if(props.panel==='guild'){
-      const [listed,tankPlayers]=await Promise.all([api('/guilds'),api('/players')]);
-      guilds.value=rows(listed);players.value=rows(tankPlayers);
+      const [listed,tankPlayers]=await Promise.all([api<any>(guildListUrl()),api('/players')]);
+      guilds.value=rows(listed);guildNext.value=listed.nextCursor??null;players.value=rows(tankPlayers);
       if(session.me?.guildId){guild.value=await api(`/guilds/${session.me.guildId}`);notice.value=guild.value.notice??'';}
       else guild.value=null;
     }
@@ -62,6 +62,10 @@ async function feed(){await run(async()=>{await command('/tank/feed',{roomId:ses
 async function supply(){await run(async()=>{const r=await command<any>('/rewards/daily');emit('toast',r.replayed?'今日补给已经领取，本次没有重复发放':`今日补给到账：${r.actualXp??r.xp??0} 经验，${r.actualPower??r.power??0} 战力`);});}
 function rankUrl(cursor?:string){return `/leaderboards?kind=${['power','guest'].includes(rankKind.value)?'current':rankKind.value}&scope=${rankKind.value==='guest'?'guests':'members'}${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`;}
 async function moreRanks(){if(!rankMeta.value.nextCursor)return;await run(async()=>{const r=await api<any>(rankUrl(rankMeta.value.nextCursor!));ranking.value.push(...rows(r));rankMeta.value={myRank:r.myRank,nextCursor:r.nextCursor};});}
+function guildListUrl(cursor?:string){const search=guildSearch.value.trim()?`&search=${encodeURIComponent(guildSearch.value.trim())}`:'';return `/guilds?limit=20${search}${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`;}
+async function searchGuilds(){await run(async()=>{const result=await api<any>(guildListUrl());guilds.value=rows(result);guildNext.value=result.nextCursor??null;});}
+async function moreGuilds(){if(!guildNext.value)return;await run(async()=>{const result=await api<any>(guildListUrl(guildNext.value!));guilds.value.push(...rows(result));guildNext.value=result.nextCursor??null;});}
+async function loadLedger(reset=true){if(!guild.value)return;const cursor=reset?null:ledgerNext.value;if(!reset&&!cursor)return;await run(async()=>{const result=await api<any>(`/guilds/${guild.value.id}/ledger?limit=20${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`);if(reset)guild.value.ledger=rows(result);else guild.value.ledger=[...(guild.value.ledger??[]),...rows(result)];ledgerNext.value=result.nextCursor??null;});}
 async function guildAction(path:string,payload:unknown={},success='组织已更新',method='POST'){await run(async()=>{await command(path,payload,method);await session.refresh();await load();},success);}
 const myGuildRole=computed(()=>guild.value?.members?.find((m:any)=>(m.userId??m.user_id)===session.me?.userId)?.role);
 const canManage=computed(()=>myGuildRole.value==='LEADER'||myGuildRole.value==='ADMIN');
@@ -124,11 +128,12 @@ async function confirmGuildAction(){
     <template v-else-if="!session.me?.guildId">
       <label class="form-field">创建鱼群<input v-model="guildName" maxlength="12" placeholder="2—12个可见字符" aria-label="鱼群名称"/></label>
       <button class="primary wide" :disabled="busy||[...guildName.trim()].length<2" @click="guildAction('/guilds',{name:guildName,badge:'〰',color:'#21BDE7',notice:''},'鱼群已创建')">消耗 {{config.guild.creationCost}} 可用战力创建</button>
-      <h3 class="section-title">发现鱼群</h3>
+      <h3 class="section-title">发现鱼群</h3><div class="inline-form"><input v-model="guildSearch" maxlength="40" placeholder="搜索鱼群名称" aria-label="搜索鱼群" @keyup.enter="searchGuilds"/><button @click="searchGuilds" :disabled="busy">搜索</button></div>
       <div v-for="g in guilds" :key="g.id" class="list-row"><Users :size="24"/><div><b>{{g.name}}</b><small>{{g.memberCount??g.member_count??0}} / {{config.guild.memberLimit}} 位成员</small></div>
         <button v-if="g.application_status==='INVITED'" :disabled="busy" @click="guildAction(`/guilds/${g.id}/invitations/accept`,{version:g.version},'已接受邀请并加入鱼群')">接受邀请</button>
         <button v-else :disabled="busy||g.application_status==='PENDING'||(g.memberCount??g.member_count??0)>=config.guild.memberLimit" @click="guildAction(`/guilds/${g.id}/applications`,{},'申请已提交，等待接纳')">{{g.application_status==='PENDING'?'已申请':'申请加入'}}</button>
       </div>
+      <button v-if="guildNext" class="text-button" @click="moreGuilds" :disabled="busy">加载更多鱼群</button>
       <div v-if="!guilds.length&&!loading" class="empty-panel">还没有鱼群，来创建第一个吧。</div>
     </template>
     <template v-else-if="guild">
@@ -150,10 +155,10 @@ async function confirmGuildAction(){
       </template>
       <label class="form-field">自愿捐献（不可退回个人）<input type="number" v-model.number="donation" min="1" step="1" aria-label="捐献数量"/></label><button class="primary wide" @click="guildConfirm={kind:'donate',text:`确认自愿捐献 ${donation} 点可用战力？组织钱包仅可购买公共装扮。`}" :disabled="busy||donation<1">捐献 {{donation}} 战力</button>
       <div v-if="guildConfirm" class="purchase-confirm"><p>{{guildConfirm.text}}</p><div class="inline-form"><button @click="guildConfirm=null">取消</button><button class="primary" @click="confirmGuildAction">确认</button></div></div>
-      <details class="bind-section"><summary>公共装扮与组织流水</summary><div v-for="item in config.catalog.filter(i=>i.scope==='GUILD')" :key="item.id" class="list-row"><span>{{item.name}} · {{item.price}} 战力</span><b v-if="guildItemOwned(item.id)">已拥有并启用</b><button v-else-if="myGuildRole==='LEADER'" @click="guildAction(`/guilds/${guild.id}/purchases`,{itemId:item.id,itemVersion:1},'公共装扮已购买并启用')" :disabled="busy">购买</button></div><button class="text-button" @click="run(async()=>{guild.ledger=rows(await api(`/guilds/${guild.id}/ledger`))})">读取组织流水</button><div v-for="l in guild.ledger" :key="l.id" class="ledger-row">{{l.kind}} · {{l.amount>0?'+':''}}{{l.amount}} · 余额{{l.balance_after}} · {{new Date(l.created_at??l.createdAt).toLocaleString('zh-CN')}}</div></details>
+      <details class="bind-section"><summary>公共装扮与组织流水</summary><div v-for="item in config.catalog.filter(i=>i.scope==='GUILD')" :key="item.id" class="list-row"><span>{{item.name}} · {{item.price}} 战力</span><b v-if="guildItemOwned(item.id)">已拥有并启用</b><button v-else-if="myGuildRole==='LEADER'" @click="guildAction(`/guilds/${guild.id}/purchases`,{itemId:item.id,itemVersion:1},'公共装扮已购买并启用')" :disabled="busy">购买</button></div><button class="text-button" @click="loadLedger(true)" :disabled="busy">读取组织流水</button><div v-for="l in guild.ledger" :key="l.id" class="ledger-row">{{l.kind}} · {{l.amount>0?'+':''}}{{l.amount}} · 余额{{l.balance_after}} · {{new Date(l.created_at??l.createdAt).toLocaleString('zh-CN')}}</div><button v-if="ledgerNext" class="text-button" @click="loadLedger(false)" :disabled="busy">加载更多流水</button></details>
       <details class="bind-section"><summary>成员与组织管理</summary><p class="tiny-label">退出或被移出后 {{config.guild.rejoinCooldownHours}} 小时内不能加入或创建其他鱼群；比赛期间不能退出或移除。组织长须先转让职位或解散。</p><button v-if="myGuildRole!=='LEADER'" class="danger-button" @click="guildAction(`/guilds/${guild.id}/leave`,{},'已退出鱼群，进入24小时冷却')" :disabled="busy">退出鱼群</button><button v-else class="danger-button" @click="guildConfirm={kind:'dissolve',text:'解散会归档全部组织资产，不向个人退款；仍有未完成比赛时服务器会拒绝。确认继续？'}" :disabled="busy">解散鱼群</button></details>
     </template>
   </template>
 
-  <ArenaPanel v-else-if="panel==='arena'" @close="emit('close')" @toast="text=>emit('toast',text)"/>
+  <ArenaPanel v-else-if="panel==='arena'" :target-user-id="arenaTargetUserId" @close="emit('close')" @toast="text=>emit('toast',text)"/>
 </template>

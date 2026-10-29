@@ -14,8 +14,8 @@ export async function registerShopRoutes(app:FastifyInstance,world:World){
   const auth=(request:FastifyRequest)=>{assert(request.userId,'AUTH_REQUIRED','请先进入游戏',401);return request.userId;};
   const key=(request:FastifyRequest)=>String(request.headers['idempotency-key']??'');
   app.get('/api/v1/shop/items',async request=>{
-    const query=z.object({scope:z.enum(['PERSONAL','GUILD']).default('PERSONAL')}).parse(request.query);
-    return {data:await getShopItems(auth(request),query.scope),requestId:request.id};
+    const query=z.object({scope:z.enum(['PERSONAL','GUILD']).default('PERSONAL'),cursor:z.coerce.number().int().nonnegative().default(0),limit:z.coerce.number().int().min(1).max(100).default(20)}).parse(request.query);
+    return {data:await getShopItems(auth(request),query.scope,query.cursor,query.limit),requestId:request.id};
   });
   app.get('/api/v1/inventory',async request=>({data:await getInventory(auth(request)),requestId:request.id}));
   app.post('/api/v1/shop/purchases',async request=>{

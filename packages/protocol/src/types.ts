@@ -55,6 +55,23 @@ export interface SelfView {
   businessDate: string;
   daily: { xpMinted: number; powerMinted: number; feedUsed: number; formalUsed: number; formalReserved: number };
 }
+export interface PublicPlayerCard {
+  userId: Id;
+  fishId: Id;
+  nickname: string;
+  role: Role;
+  level: number;
+  totalPower: number;
+  guild: { id: Id; name: string; badge: string; color: string } | null;
+  currentMatchId: Id | null;
+  recentMatches: Array<{
+    matchId: Id;
+    mode: MatchMode;
+    outcome: 'WIN' | 'DRAW' | 'LOSS' | 'ABORTED';
+    reason: MatchResultView['reason'];
+    committedAt: string;
+  }>;
+}
 export type MoveIntent = { kind: 'idle' } | { kind: 'direction'; direction: Vec2 } | { kind: 'target'; target: Vec2 };
 export interface ActionIntent {
   actionSeq: number;

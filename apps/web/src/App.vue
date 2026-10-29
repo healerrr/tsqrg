@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
 import { Fish, Waves, ShoppingBag, Users, Trophy, Utensils, X, ChevronRight, Settings2, Volume2, VolumeX, Zap, Shield, Crown, MousePointer2, Keyboard, ArrowUpRight, Sparkles, Check, Palette, Info } from 'lucide-vue-next';
 import { createAquarium } from './game/aquarium';
-import type { Appearance, FishSnapshot, PresetId } from '@aquarium/protocol';
+import type { Appearance, FishSnapshot, PresetId, PublicPlayerCard } from '@aquarium/protocol';
 import { config, xpForLevel, xpToNext } from '@aquarium/core';
 import { api } from './api';
 import { useSession } from './stores/session';
@@ -13,7 +13,7 @@ const host=ref<HTMLElement>();
 const dialog=ref<HTMLElement>();
 let previousFocus:HTMLElement|null=null;
 let aquarium:Awaited<ReturnType<typeof createAquarium>>|undefined;
-const panel=ref(''); const selected=ref(''); const fps=ref(0); const message=ref('');
+const panel=ref(''); const selected=ref(''); const selectedCard=shallowRef<PublicPlayerCard|null>(null); const selectedLoading=ref(false); const selectedError=ref(''); const arenaTargetUserId=ref(''); const fps=ref(0); const message=ref('');
 const muted=ref(localStorage.getItem('tank.muted')!=='false');
 const reduced=ref(localStorage.getItem('tank.reduced')==='true');
 const quality=ref<'normal'|'low'>(localStorage.getItem('tank.quality')==='low'?'low':'normal');
@@ -44,7 +44,15 @@ const currentPreset=computed(()=>presets.find(p=>p.id===appearance.value.presetI
 const items=config.catalog.filter(i=>i.scope==='PERSONAL');
 let toastTimer:ReturnType<typeof setTimeout>;
 function toast(text:string){message.value=text;clearTimeout(toastTimer);toastTimer=setTimeout(()=>message.value='',3500);}
-function open(id:string){selected.value='';if(!isPreview&&session.me&&!session.me.fishId&&!['settings','guide'].includes(id)){panel.value='create';return;}panel.value=panel.value===id?'':id;}
+function open(id:string,targetUserId=''){selected.value='';selectedCard.value=null;selectedError.value='';if(id==='arena')arenaTargetUserId.value=targetUserId;if(!isPreview&&session.me&&!session.me.fishId&&!['settings','guide'].includes(id)){panel.value='create';return;}panel.value=panel.value===id?'':id;}
+async function selectFish(id:string){
+  selected.value=id;panel.value='';selectedCard.value=null;selectedError.value='';selectedLoading.value=false;
+  if(isPreview||id===session.me?.fishId)return;
+  selectedLoading.value=true;
+  try{const card=await api<PublicPlayerCard>(`/players/${encodeURIComponent(id)}/card`);if(selected.value===id)selectedCard.value=card;}
+  catch(error){if(selected.value===id)selectedError.value=(error as Error).message;}
+  finally{if(selected.value===id)selectedLoading.value=false;}
+}
 function choose(p:typeof presets[number]){appearance.value={...appearance.value,presetId:p.id,bodyColor:p.color};}
 function previewItem(item:typeof items[number]){appearance.value={...appearance.value,equipped:{...appearance.value.equipped,[item.slot]:item.id}};toast('试穿已显示在你的鱼上');}
 function dash(){aquarium?.triggerAction('dash');if(isPreview)sound.play('dash');}
@@ -62,7 +70,7 @@ watch(reduced,v=>{aquarium?.setReducedMotion(v);localStorage.setItem('tank.reduc
 watch(quality,v=>{aquarium?.setQuality(v);localStorage.setItem('tank.quality',v);});
 watch(muted,v=>{localStorage.setItem('tank.muted',String(v));sound.setMuted(v);});
 function escape(e:KeyboardEvent){if(e.key==='Escape'){panel.value='';selected.value='';}if(e.key==='Tab'&&panel.value&&dialog.value){const list=[...dialog.value.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),a[href],summary')].filter(el=>el.getClientRects().length);const first=list[0],last=list.at(-1);if(!first)return;if(e.shiftKey&&(document.activeElement===first||document.activeElement===dialog.value)){e.preventDefault();last?.focus();}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}}
-onMounted(async()=>{try{aquarium=await createAquarium(host.value!,{onMove:move=>session.setMove(move),onAction:kind=>session.action(kind),onSelect:id=>{selected.value=id;panel.value='';},onStats:stats=>fps.value=Math.round(stats.fps),onError:toast});aquarium.setPreviewMode(isPreview);aquarium.setReducedMotion(reduced.value);aquarium.setQuality(quality.value);if(isPreview)aquarium.setAppearancePreview(appearance.value);session.onInput(p=>aquarium?.recordInput(p));session.onSnapshot(p=>{aquarium?.setSnapshot(p);aquarium?.setSelfId(session.me?.fishId??null);});session.onEvent(e=>{aquarium?.showEvent(e);sound.play(e.payload.kind);});if(import.meta.env.DEV&&new URLSearchParams(location.search).has('qa'))Object.assign(window,{__aquarium:aquarium,__session:session});await session.start(isPreview);}catch(e){toast('水族箱加载失败，请刷新重试');console.error(e);}window.addEventListener('keydown',escape);});
+onMounted(async()=>{try{aquarium=await createAquarium(host.value!,{onMove:move=>session.setMove(move),onAction:kind=>session.action(kind),onSelect:id=>{void selectFish(id);},onStats:stats=>fps.value=Math.round(stats.fps),onError:toast});aquarium.setPreviewMode(isPreview);aquarium.setReducedMotion(reduced.value);aquarium.setQuality(quality.value);if(isPreview)aquarium.setAppearancePreview(appearance.value);session.onInput(p=>aquarium?.recordInput(p));session.onSnapshot(p=>{aquarium?.setSnapshot(p);aquarium?.setSelfId(session.me?.fishId??null);});session.onEvent(e=>{aquarium?.showEvent(e);sound.play(e.payload.kind);});if(import.meta.env.DEV&&new URLSearchParams(location.search).has('qa'))Object.assign(window,{__aquarium:aquarium,__session:session});await session.start(isPreview);}catch(e){toast('水族箱加载失败，请刷新重试');console.error(e);}window.addEventListener('keydown',escape);});
 onBeforeUnmount(()=>{session.stop();sound.destroy();aquarium?.destroy();clearTimeout(toastTimer);if(boardTimer)clearInterval(boardTimer);window.removeEventListener('keydown',escape);});
 </script>
 
@@ -104,12 +112,12 @@ onBeforeUnmount(()=>{session.stop();sound.destroy();aquarium?.destroy();clearTim
 
     <Transition name="toast"><div v-if="message" class="toast-message" role="status"><Check :size="18"/>{{message}}</div></Transition>
 
-    <div v-if="selected" class="fish-card glass"><button class="close-small" aria-label="关闭角色卡" @click="selected=''"><X :size="18"/></button><Fish :size="38" class="gold"/><h3>{{isPreview?'水族箱里的朋友':session.snapshot?.fish.find(f=>f.id===selected)?.nickname}}</h3><p>{{isPreview?'本地展示角色':`Lv.${session.snapshot?.fish.find(f=>f.id===selected)?.level??1} · 每一条玩家鱼都受到保护`}}</p><button class="primary" @click="open(selected===session.me?.fishId?'fish':'arena')">{{isPreview?'看看我的鱼':selected===session.me?.fishId?'查看我的鱼':'邀请一场 PK'}}</button></div>
+    <div v-if="selected" class="fish-card glass"><button class="close-small" aria-label="关闭角色卡" @click="selected='';selectedCard=null"><X :size="18"/></button><Fish :size="38" class="gold"/><h3>{{isPreview?'水族箱里的朋友':session.snapshot?.fish.find(f=>f.id===selected)?.nickname}}</h3><p v-if="isPreview">本地展示角色</p><template v-else-if="selected===session.me?.fishId"><p>Lv.{{session.me?.level??1}} · {{session.me?.guildId?'已加入鱼群':'自由游动'}} · {{session.me?.wallet.totalPower??0}} 战力</p></template><template v-else-if="selectedCard"><p>Lv.{{selectedCard.level}} · {{selectedCard.guild?`${selectedCard.guild.badge} ${selectedCard.guild.name}`:'自由游动'}} · {{selectedCard.totalPower}} 战力</p><div class="card-record"><span v-for="record in selectedCard.recentMatches.slice(0,5)" :key="record.matchId" :class="record.outcome.toLowerCase()">{{record.outcome==='WIN'?'胜':record.outcome==='LOSS'?'负':record.outcome==='DRAW'?'平':'止'}}</span><small>{{selectedCard.recentMatches.length?'最近战绩':'还没有战绩'}}</small></div><p v-if="selectedCard.currentMatchId" class="card-busy">这条鱼正在比赛中</p></template><p v-else-if="selectedLoading">正在读取真实战力与战绩…</p><p v-else class="card-busy">{{selectedError||'角色资料暂时不可用'}}</p><button class="primary" :disabled="!isPreview&&selected!==session.me?.fishId&&(!selectedCard||!!selectedCard.currentMatchId)" @click="open(selected===session.me?.fishId?'fish':'arena',selectedCard?.userId??'')">{{isPreview?'看看我的鱼':selected===session.me?.fishId?'查看我的鱼':selectedCard?.currentMatchId?'比赛进行中':'邀请一场 PK'}}</button></div>
 
     <div v-if="panel" class="modal-backdrop" @pointerdown.self="panel=''">
       <section ref="dialog" tabindex="-1" class="panel" role="dialog" aria-modal="true" :aria-label="panel==='fish'?'我的鱼':'水族箱面板'">
         <button class="panel-close" aria-label="关闭面板" @click="panel=''"><X :size="21"/></button>
-        <OnlinePanels v-if="!isPreview&&panel!=='settings'&&panel!=='guide'" :panel="panel" :presets="presets" :colors="colors" :appearance="appearance" @preview="v=>{appearance=v;aquarium?.setAppearancePreview(v)}" @close="panel=''" @toast="toast"/>
+        <OnlinePanels v-if="!isPreview&&panel!=='settings'&&panel!=='guide'" :panel="panel" :presets="presets" :colors="colors" :appearance="appearance" :arena-target-user-id="arenaTargetUserId" @preview="v=>{appearance=v;aquarium?.setAppearancePreview(v)}" @close="panel=''" @toast="toast"/>
         <template v-else-if="panel==='fish'">
           <div class="eyebrow"><Fish :size="17"/> 我的摸鱼搭子</div><h1>今天，想做哪条鱼？</h1><p class="panel-intro">选个合拍的模样，游进自己的节奏。</p>
           <div class="fish-selector"><button v-for="p in presets" :key="p.id" :class="{chosen:appearance.presetId===p.id}" @click="choose(p)"><span class="preset-icon" :style="{background:p.color}"><Fish :size="30"/></span><b>{{p.name}}</b><small>{{p.tag}}</small><Check v-if="appearance.presetId===p.id" class="preset-check" :size="14"/></button></div>

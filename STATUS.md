@@ -97,4 +97,13 @@
 - 本轮实际执行 Node 24 的 Server `tsc --noEmit`、Web `vue-tsc --noEmit`、针对性 ESLint 与完整 `pnpm build`，均通过；生产 Web 主包 624.11 kB、gzip 206.17 kB，仍有单 chunk 超过 500 kB 的非阻断警告。`git diff --check` 通过，三个运维命令的 `--help` 入口均实际成功。未运行 M7 长 E2E、30 连接/两场团战负载、30 分钟内存、Docker 空环境或备份恢复演练，以上仍是正式封板缺口。
 - 尝试执行 `node --import tsx tests/integration/m8.ts`，本机 PostgreSQL `127.0.0.1:55432` 当前未启动，连接在创建测试管理员前即 `ECONNREFUSED`，未进入任何 M8 业务断言、也未写入测试数据；此轮不计通过，留待统一启动数据库后验证。
 
+### M7/M8 代码完整性补齐（2026-10-29，测试后置）
+
+- 补齐规范中的真实比赛历史分页与模式筛选：`GET /matches/history` 现在校验 `cursor`、`limit`、`mode`，按结算时间和比赛 ID 稳定排序并返回 `items/nextCursor`；竞技面板可分别查看正式/友谊个人赛和团战并加载更多。
+- 组织赛季榜可选择 `YYYY-MM` 历史赛季、回到上海时区当前赛季并继续分页。管理员页消费后端现有游标，可继续加载邀请码、上传图片和审计记录，不再固定只显示前 20 条。
+- 商城目录补齐 `scope/cursor/limit` 分页契约；组织发现页接入名称搜索与游标分页，组织内部流水接入分页续读。已有六件个人商品和两件组织商品仍来自统一版本化配置与数据库种子。
+- 新增只读公开角色卡 `GET /players/:fishId/card`：点击同缸玩家可查看等级、总战力、组织和最近五场胜/平/负摘要，不返回 C/H/A 等私有钱包拆分。角色卡的“邀请 PK”会把刚选中的玩家置顶带入竞技面板，忙碌玩家明确禁用邀请。
+- Vite 生产拆包将 Vue、PixiJS、Socket.IO 和图标拆为稳定独立 chunk；本轮生成的主业务 JS 为 230.17 kB，Pixi chunk 为 532.73 kB。`pnpm build` 已生成带新哈希的 `dist`，但命令跨过本工具 30 秒回传窗口且未捕获最终退出行，因此本段不把完整构建记为新一次通过，留待统一验收复跑。
+- 本轮实际通过：Node 24 的 Protocol `tsc --noEmit`、Server `tsc --noEmit`、Web `vue-tsc --noEmit`、改动相关 TypeScript ESLint、`git diff --check`。按“测试后置”要求未启动 PostgreSQL，未运行 M7/M8 集成、浏览器 E2E、30 连接、30 分钟耐久、备份恢复或 Docker 空环境。
+
 记录日期、所完成阶段、改变的文件、实际运行命令、运行结果、人工验证证据、尚未完成的事项以及下一步。项目原有规则调整也在这里记录，不把尚未实现的需求标为完成。

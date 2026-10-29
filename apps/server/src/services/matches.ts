@@ -96,9 +96,19 @@ export class MatchService {
       deadlineAtServerMs:match.deadline_at?new Date(match.deadline_at).getTime():0,guildA:match.guild_a,guildB:match.guild_b,
       participants:participants.rows.map(p=>({userId:p.user_id,fishId:p.fish_id,nickname:p.nickname,team:p.team,ready:p.ready,withdrawn:!!match.payload.withdrawals?.[p.user_id]})),result:result.rows[0]?.result_json??null };
   }
-  async history(userId: string, limit = 20) {
-    const results = await pool.query('SELECT r.result_json FROM match_results r JOIN match_participants p ON p.match_id=r.match_id WHERE p.user_id=$1 ORDER BY r.created_at DESC,r.match_id LIMIT $2', [userId,Math.min(100,Math.max(1,limit))]);
-    return results.rows.map(r=>r.result_json as MatchResultView);
+  async history(userId: string, options: { cursor?: number; limit?: number; mode?: MatchMode } = {}) {
+    const offset=Math.max(0,options.cursor??0),limit=Math.min(100,Math.max(1,options.limit??20));
+    const parameters:unknown[]=[userId];
+    const modeFilter=options.mode?` AND m.mode=$${parameters.push(options.mode)}`:'';
+    parameters.push(limit+1,offset);
+    const results=await pool.query(`SELECT r.result_json FROM match_results r
+      JOIN matches m ON m.id=r.match_id JOIN match_participants p ON p.match_id=r.match_id
+      WHERE p.user_id=$1${modeFilter} ORDER BY r.created_at DESC,r.match_id DESC
+      LIMIT $${parameters.length-1} OFFSET $${parameters.length}`,parameters);
+    return {
+      items:results.rows.slice(0,limit).map(row=>row.result_json as MatchResultView),
+      nextCursor:results.rows.length>limit?String(offset+limit):null,
+    };
   }
   private async sync(id: string) {
     const participants = await pool.query('SELECT user_id FROM match_participants WHERE match_id=$1',[id]);
