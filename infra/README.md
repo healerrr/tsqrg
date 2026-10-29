@@ -26,6 +26,8 @@ pnpm dev
 4. 在宿主机 TLS 反向代理或公司网关将该域名转发到 `127.0.0.1:8080`，保留 Host、Origin 和 WebSocket Upgrade。生产 HttpOnly Cookie 使用 Secure，必须经 HTTPS 访问。内置 Nginx 只监听容器 HTTP，并将宿主端口限制在回环。
 5. 访问 `/api/v1/health/live` 和 `/api/v1/health/ready`。readiness 必须在数据库可用、唯一模拟实例锁取得、旧冻结恢复之后才成功。
 
+生产启动会在连接数据库前校验全部必要环境变量：`APP_ORIGIN` 必须是无额外路径的 HTTPS 来源，`UPLOAD_DIR` 必须是非根目录绝对路径，业务时区固定为 `Asia/Shanghai`，`RULES_VERSION` 必须与构建内配置一致，端口与日志级别必须有效。任何一项缺失或不一致都会直接拒绝启动，不回退到开发默认值。
+
 Docker 生产配置未在当前无 Docker 的 Windows 环境执行；不能仅凭配置文件存在将 OPS03 标为通过。首次生产使用前须按本节从空数据库复现、确认迁移/种子和同域上传、HTTP、WebSocket，并记录结果。
 
 不要将 `game` 扩容为多个权威实例。数据库 advisory lock 作为最后防线拒绝第二实例，主锁丢失时应停止资产写入并使 readiness 失败。没有房间调度的首版不支持多节点并行模拟。

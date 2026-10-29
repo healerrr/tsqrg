@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { isAbsolute, parse, resolve } from 'node:path';
 import Fastify from 'fastify';
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
@@ -25,10 +26,20 @@ declare module 'fastify' { interface FastifyRequest { userId: string | null } }
 export async function createApp() {
   const production = process.env.NODE_ENV === 'production';
   const metricsToken = process.env.OPS_METRICS_TOKEN ?? '';
-  if (production && (
-    !process.env.SESSION_SECRET || process.env.SESSION_SECRET.length < 32 ||
-    !process.env.DATABASE_URL || !process.env.APP_ORIGIN || metricsToken.length < 24
-  )) throw new Error('生产环境必须配置 DATABASE_URL、APP_ORIGIN、至少32字符 SESSION_SECRET 与至少24字符 OPS_METRICS_TOKEN');
+  if (production) {
+    const required=['HOST','PORT','DATABASE_URL','APP_ORIGIN','SESSION_SECRET','UPLOAD_DIR','GAME_TIMEZONE','RULES_VERSION','LOG_LEVEL','OPS_METRICS_TOKEN'] as const;
+    const missing=required.filter(name=>!process.env[name]);
+    if(missing.length)throw new Error(`生产环境缺少必要变量：${missing.join('、')}`);
+    if(process.env.SESSION_SECRET!.length<32||metricsToken.length<24)throw new Error('生产环境 SESSION_SECRET 至少32字符，OPS_METRICS_TOKEN 至少24字符');
+    const port=Number(process.env.PORT),origin=new URL(process.env.APP_ORIGIN!);
+    if(!Number.isInteger(port)||port<1||port>65535)throw new Error('生产环境 PORT 必须是1—65535的整数');
+    if(origin.protocol!=='https:'||origin.pathname!=='/'||origin.search||origin.hash||origin.username||origin.password)throw new Error('生产环境 APP_ORIGIN 必须是无凭据、路径、查询或片段的 HTTPS 同域来源');
+    const uploadPath=resolve(process.env.UPLOAD_DIR!);
+    if(!isAbsolute(process.env.UPLOAD_DIR!)||uploadPath===parse(uploadPath).root)throw new Error('生产环境 UPLOAD_DIR 必须是非根目录的绝对路径');
+    if(process.env.GAME_TIMEZONE!=='Asia/Shanghai')throw new Error('首版生产业务时区必须是 Asia/Shanghai');
+    if(process.env.RULES_VERSION!==config.rulesVersion)throw new Error(`生产规则版本必须与构建配置一致：${config.rulesVersion}`);
+    if(!['fatal','error','warn','info','debug','trace','silent'].includes(process.env.LOG_LEVEL!))throw new Error('生产环境 LOG_LEVEL 无效');
+  }
 
   const app = Fastify({
     logger: {
