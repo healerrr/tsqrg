@@ -229,6 +229,7 @@ export class BattleWorld implements BattleBridge {
     for(const fighter of arena.fighters) {
       const player=fighter.player;if(player.roomId!==arena.roomId)continue;
       player.roomId=this.world.tankRoomForReturn(player,fighter.tankRoom);
+      this.world.rememberTankLocation(player);
       player.fish={...fighter.tankFish,appearance:player.self.appearance??fighter.tankFish.appearance,level:player.self.level,guildId:player.self.guildId,team:null,hp:null,maxHp:null,animation:'idle',velocity:{x:0,y:0},followGroupId:null,shieldUntilServerMs:0,respawnAtServerMs:null,interactive:player.disconnectedAt===null};
       player.input={kind:'idle'};player.ackInputSeq=0;player.ackActionSeq=0;player.dashUntil=0;player.shieldUntil=0;this.newEpoch(player);
     }

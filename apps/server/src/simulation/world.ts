@@ -6,6 +6,7 @@ import { claimControlSchema, emoteSchema, followSchema, helloSchema, inputFrameS
 import { selfView } from '../services/identity';
 import { AppError, assert } from '../http/errors';
 import { guildMarkForUser } from '../services/guilds';
+import { loadTankLocation, saveTankLocations } from '../services/presence';
 
 export interface PlayerRuntime {
   self: SelfView; fish: FishSnapshot; roomId: string; controlSocketId: string | null;
@@ -35,6 +36,8 @@ export class World {
   ecosystem: { step(now: number, dt: number): void; snapshot(roomId: string): Pick<SceneSnapshot, 'food'|'npc'> } | null = null;
   followGroups = new Map<string, FollowGroupRuntime>();
   emptyRoomSince = new Map<string, number>();
+  private dirtyTankLocations = new Map<string, string>();
+  private locationWrite: Promise<void> | null = null;
   private timer: ReturnType<typeof setInterval> | null = null;
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -47,6 +50,7 @@ export class World {
   }
   stop() { if (this.timer) clearInterval(this.timer); if (this.snapshotTimer) clearInterval(this.snapshotTimer); if (this.heartbeatTimer) clearInterval(this.heartbeatTimer); }
   maintainPresence(now = Date.now()) {
+    void this.flushTankLocations();
     for (const p of this.players.values()) if (p.controlSocketId && this.connections.get(p.controlSocketId)?.socket.connected) p.leaseUntil = now + config.network.controlLeaseTtlMs;
     const connectedUsers = new Set([...this.connections.values()].filter(connection => connection.socket.connected).map(connection => connection.userId));
     for (const roomId of [...this.roomEpochs.keys()]) {
@@ -65,7 +69,29 @@ export class World {
       for (const [key, group] of this.followGroups) if (group.roomId === roomId) this.followGroups.delete(key);
     }
   }
-  private tankRoomFor(guildId: string | null, excludeUserId?: string): string {
+  rememberTankLocation(player: PlayerRuntime) {
+    if (!/^tank:[1-9]\d{0,8}$/.test(player.roomId)) return;
+    this.dirtyTankLocations.set(player.self.userId, player.roomId);
+    void this.flushTankLocations();
+  }
+  async flushTankLocations(): Promise<void> {
+    if (this.locationWrite) { await this.locationWrite; return; }
+    if (!this.dirtyTankLocations.size) return;
+    this.locationWrite = (async () => {
+      while (this.dirtyTankLocations.size) {
+        const locations = [...this.dirtyTankLocations.entries()];
+        try { await saveTankLocations(locations); }
+        catch (error) { console.error('分缸偏好保存失败，保留待重试', error); return; }
+        for (const [userId, roomId] of locations) if (this.dirtyTankLocations.get(userId) === roomId) this.dirtyTankLocations.delete(userId);
+      }
+    })().finally(() => { this.locationWrite = null; });
+    await this.locationWrite;
+  }
+  private tankRoomFor(guildId: string | null, excludeUserId?: string, preferredRoom?: string | null): string {
+    if (preferredRoom && /^tank:[1-9]\d{0,8}$/.test(preferredRoom) && this.roomSize(preferredRoom) < config.tank.maxOnlinePlayers) {
+      if (!this.roomEpochs.has(preferredRoom)) this.roomEpochs.set(preferredRoom, randomUUID());
+      return preferredRoom;
+    }
     const guildPeer=[...this.players.entries()].find(([userId,p])=>userId!==excludeUserId&&guildId&&p.self.guildId===guildId&&p.roomId.startsWith('tank:')&&this.roomSize(p.roomId)<config.tank.maxOnlinePlayers)?.[1];
     let roomId=guildPeer?.roomId??[...this.roomEpochs.keys()].find(id=>id.startsWith('tank:')&&this.roomSize(id)<config.tank.maxOnlinePlayers);
     if(!roomId){let number=1;while(this.roomEpochs.has(`tank:${number}`))number++;roomId=`tank:${number}`;this.roomEpochs.set(roomId,randomUUID());}
@@ -78,6 +104,7 @@ export class World {
   async refreshPlayer(userId: string): Promise<PlayerRuntime | null> {
     const self = await selfView(userId);
     const guildMark = await guildMarkForUser(userId);
+    const preferredRoom = this.players.has(userId) ? null : await loadTankLocation(userId);
     const old = this.players.get(userId);
     if (!self.fishId || !self.appearance) return null;
     if (old) {
@@ -92,7 +119,7 @@ export class World {
       if (!self.guildId || self.guildId !== previousGuildId) this.disableFollow(old);
       return old;
     }
-    const roomId=this.tankRoomFor(self.guildId,userId);
+    const roomId=this.tankRoomFor(self.guildId,userId,preferredRoom);
     const fish: FishSnapshot = { id: self.fishId, nickname: self.nickname, position: { x: 400 + Math.random()*1000, y: 250 + Math.random()*450 }, velocity: { x: 0, y: 0 }, facing: 'right', angle: 0,
       appearance: self.appearance, level: self.level, displaySize: displaySize(self.level), guildId: self.guildId, guildMark, team: null, animation: 'idle', interactive: true, followGroupId: null, followLeaderFishId: null, hp: null, maxHp: null, shieldUntilServerMs: 0, respawnAtServerMs: null };
     const p: PlayerRuntime = { self, fish, roomId, controlSocketId: null, leaseUntil: 0, input: { kind: 'idle' }, lastInputAt: 0, lastActivityAt: 0, pageVisible: true, ackInputSeq: 0, ackActionSeq: 0,
@@ -113,10 +140,11 @@ export class World {
       assert(payload.protocolVersion === 1, 'PROTOCOL_VERSION_UNSUPPORTED', '游戏版本不兼容，请更新页面');
       const p = await this.refreshPlayer(userId);
       if (p && (!p.controlSocketId || !this.connections.has(p.controlSocketId) || p.leaseUntil <= Date.now())) this.claim(c, p);
+      await this.flushTankLocations();
       socket.emit('session:welcome', { protocolVersion: 1, rulesVersion: config.rulesVersion, serverTimeMs: Date.now(), controlledFishId: p?.controlSocketId === socket.id ? p.fish.id : null, sceneEpoch: c.sceneEpoch, recovered: false });
       return { accepted: true };
     }));
-    socket.on('control:claim', respond(async raw => { claimControlSchema.parse(raw); const p = await this.refreshPlayer(userId); assert(p, 'FISH_NOT_OWNED', '请先创建自己的鱼'); assert(!c.watchMatchId,'MATCH_STATE_INVALID','请先结束观战返回主缸');this.claim(c, p); return { sceneEpoch: c.sceneEpoch, controlledFishId: p.controlSocketId===socket.id?p.fish.id:null }; }));
+    socket.on('control:claim', respond(async raw => { claimControlSchema.parse(raw); const p = await this.refreshPlayer(userId); assert(p, 'FISH_NOT_OWNED', '请先创建自己的鱼'); assert(!c.watchMatchId,'MATCH_STATE_INVALID','请先结束观战返回主缸');this.claim(c, p);await this.flushTankLocations();return { sceneEpoch: c.sceneEpoch, controlledFishId: p.controlSocketId===socket.id?p.fish.id:null }; }));
     socket.on('scene:join', respond(async raw => {
       const payload = joinSceneSchema.parse(raw); const p = this.players.get(userId); assert(p, 'FISH_NOT_OWNED', '请先创建自己的鱼');
       if (payload.sceneKind !== 'TANK' || p.self.currentMatchId || c.watchMatchId) { assert(this.battle, 'MATCH_STATE_INVALID', '当前没有可进入的比赛'); await this.battle.join(userId, payload,c); }
@@ -165,11 +193,17 @@ export class World {
     if(this.battle?.canControl?.(p.self.userId)===false) {
       c.sceneEpoch=randomUUID();c.socket.emit('control:changed',{controlled:false,controlledFishId:null,sceneEpoch:c.sceneEpoch});return;
     }
+    // Admission is synchronous: profiles may have been loaded concurrently while a seat was still free.
+    if (p.disconnectedAt !== null && p.roomId.startsWith('tank:') && this.roomSize(p.roomId) >= config.tank.maxOnlinePlayers) {
+      p.roomId = this.tankRoomFor(p.self.guildId, p.self.userId);
+      p.input = { kind: 'idle' }; p.fish.velocity = { x: 0, y: 0 }; this.disableFollow(p);
+    }
     const previous = p.controlSocketId ? this.connections.get(p.controlSocketId) : null;
     if (previous && previous.socket.id !== c.socket.id) { previous.sceneEpoch = randomUUID(); previous.socket.emit('control:changed', { controlled: false, controlledFishId: null, sceneEpoch: previous.sceneEpoch }); }
     p.controlSocketId = c.socket.id; p.leaseUntil = Date.now()+config.network.controlLeaseTtlMs; p.disconnectedAt = null;
     p.input = { kind: 'idle' }; p.ackInputSeq = 0; p.ackActionSeq = 0; p.pageVisible = true; c.sceneEpoch = randomUUID();
     c.socket.emit('control:changed', { controlled: true, controlledFishId: p.fish.id, sceneEpoch: c.sceneEpoch });
+    this.rememberTankLocation(p);
   }
   private followKey(p: PlayerRuntime): string | null { return p.self.guildId ? `${p.self.guildId}:${p.roomId}` : null; }
   private followGroup(p: PlayerRuntime): FollowGroupRuntime | undefined { const key = this.followKey(p); return key ? this.followGroups.get(key) : undefined; }

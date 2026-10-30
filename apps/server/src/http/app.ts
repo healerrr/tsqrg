@@ -358,6 +358,7 @@ export async function createApp() {
       if (shouldFlushOutbox) await drainOutbox();
       io.close();
       await app.close();
+      await world.flushTankLocations();
       await releaseMainInstance();
       await pool.end();
     })();

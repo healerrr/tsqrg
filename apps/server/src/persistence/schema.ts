@@ -12,6 +12,7 @@ export const fish = pgTable('fish', {
   nickname: text('nickname').notNull(), presetId: text('preset_id').notNull(),
   totalXp: integer('total_xp').notNull().default(0), appearance: jsonb('appearance_json').$type<Appearance>().notNull(),
   appearanceVersion: integer('appearance_version').notNull().default(1), highestPower: integer('highest_power').notNull(),
+  lastTankRoomId: text('last_tank_room_id'),
 });
 export const wallets = pgTable('wallets', {
   id: text('id').primaryKey(), ownerKind: text('owner_kind').notNull(),

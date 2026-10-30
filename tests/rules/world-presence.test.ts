@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { config } from '../../packages/game-core/src/index';
 import type { Appearance, FishSnapshot, SelfView } from '../../packages/protocol/src/index';
 import { World, type ConnectionRuntime, type PlayerRuntime } from '../../apps/server/src/simulation/world';
+import { saveTankLocations } from '../../apps/server/src/services/presence';
+
+vi.mock('../../apps/server/src/services/presence', () => ({ loadTankLocation: vi.fn().mockResolvedValue(null), saveTankLocations: vi.fn().mockResolvedValue(undefined) }));
+beforeEach(() => { vi.clearAllMocks(); });
 
 const appearance: Appearance = {
   presetId: 'goldfish', bodyColor: '#ffb84c', finColor: '#4c9cec', patternId: 'none', skinAssetId: null, equipped: {}, version: 1,
@@ -67,5 +71,42 @@ describe('公共缸运行时维护', () => {
     expect(roomFor(null)).toBe('tank:2');
     expect(world.roomEpochs.get('tank:3')).toBe('room-three');
     expect(world.roomEpochs.has('tank:2')).toBe(true);
+  });
+
+  it('两条已读取档案的连接依次取得最后一个位置时，第二条进入其他分缸', async () => {
+    const world = new World({} as ConstructorParameters<typeof World>[0]);
+    for (let index = 0; index < config.tank.maxOnlinePlayers - 1; index++) world.players.set(`online-${index}`, player(`online-${index}`, 'tank:1', null));
+    const first = player('first', 'tank:1', 1), second = player('second', 'tank:1', 1);
+    world.players.set('first', first); world.players.set('second', second);
+    for (const runtime of [first, second]) {
+      const connection = observer(runtime.self.userId);
+      Object.assign(connection.socket, { id: `socket-${runtime.self.userId}`, emit: vi.fn() });
+      world.connections.set(connection.socket.id, connection);
+      world.claim(connection, runtime);
+    }
+    await world.flushTankLocations();
+    expect(world.roomSize('tank:1')).toBe(config.tank.maxOnlinePlayers);
+    expect(second.roomId).not.toBe('tank:1');
+    expect(world.roomSize(second.roomId)).toBe(1);
+  });
+
+  it('保存偏好指向的分缸在重启后可恢复，但不能突破其在线容量', () => {
+    const world = new World({} as ConstructorParameters<typeof World>[0]);
+    const roomFor = (world as unknown as { tankRoomFor(guildId: string | null, excludeUserId?: string, preferredRoom?: string): string }).tankRoomFor.bind(world);
+    expect(roomFor(null, 'returning', 'tank:7')).toBe('tank:7');
+    expect(world.roomEpochs.has('tank:7')).toBe(true);
+    for (let index = 0; index < config.tank.maxOnlinePlayers; index++) world.players.set(`seven-${index}`, player(`seven-${index}`, 'tank:7', null));
+    expect(roomFor(null, 'returning', 'tank:7')).not.toBe('tank:7');
+  });
+
+  it('旧位置仍在写入时产生新位置，等待完成会继续提交最新位置', async () => {
+    const world = new World({} as ConstructorParameters<typeof World>[0]);
+    let completeFirst!: () => void;
+    vi.mocked(saveTankLocations).mockImplementationOnce(() => new Promise<void>(resolve => { completeFirst = resolve; }));
+    const runtime = player('moving', 'tank:1', null);
+    world.rememberTankLocation(runtime);
+    runtime.roomId = 'tank:2'; world.rememberTankLocation(runtime);
+    const flushing = world.flushTankLocations(); completeFirst(); await flushing;
+    expect(vi.mocked(saveTankLocations).mock.calls.map(([locations]) => locations)).toEqual([[['moving', 'tank:1']], [['moving', 'tank:2']]]);
   });
 });
