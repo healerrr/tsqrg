@@ -1,0 +1,11 @@
+[Unit]
+Description=Aquarium PostgreSQL and upload backup
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/aquarium
+ExecStart=/usr/bin/docker compose --env-file /opt/aquarium/.env -f /opt/aquarium/infra/compose.yml --profile operations run --rm --no-deps backup
+TimeoutStartSec=20min

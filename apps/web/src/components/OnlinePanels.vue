@@ -14,39 +14,46 @@ const session=useSession();
 const loading=ref(false),busy=ref(false),error=ref(''),nickname=ref(''),inviteCode=ref(''),surfaceX=ref(960),tab=ref('all');
 const draft=ref<Appearance>(structuredClone({...props.appearance,equipped:{...props.appearance.equipped}}));
 const inventory=ref<string[]>([]),shopItems=ref<any[]>([]),guildShopItems=ref<any[]>([]),skinAssets=ref<any[]>([]),skinNext=ref<string|null>(null),ranking=ref<any[]>([]),rankKind=ref('power');
-const rankMeta=ref<{myRank:number|null;nextCursor:string|null}>({myRank:null,nextCursor:null});
+const rankMeta=ref<{myRank:number|null;nextCursor:string|null;nearby:any[]}>({myRank:null,nextCursor:null,nearby:[]});
 const purchase=ref<any|null>(null),players=ref<any[]>([]),guilds=ref<any[]>([]),guild=ref<any|null>(null);
 const guildName=ref(''),guildSearch=ref(''),guildNext=ref<string|null>(null),ledgerNext=ref<string|null>(null),notice=ref(''),donation=ref(10);
 const guildBadge=ref('〰'),guildColor=ref('#21BDE7');
+const appliedGuildSearch=ref('');
+let loadRevision=0,disposed=false;
+onBeforeUnmount(()=>{disposed=true;loadRevision++;});
 const guildConfirm=ref<({kind:'donate';amount:number}|{kind:'dissolve'})&{text:string} | null>(null);
 const productIcons:Record<string,any>={'glasses.round':Glasses,'headphones.basic':Headphones,'hat.fish':Crown,'outfit.pirate':Flag,'trail.star':Sparkles,'charm.seagrass':Leaf};
 const owned=computed(()=>new Set(inventory.value));
 const filteredItems=computed(()=>shopItems.value.filter(i=>i.scope==='PERSONAL'&&(tab.value==='all'||tab.value==='owned'&&owned.value.has(i.id)||tab.value===i.slot)));
 const xpProgress=computed(()=>{const m=session.me;if(!m)return 0;return m.level===config.fish.maxLevel?100:Math.max(0,(m.totalXp-xpForLevel(m.level))/xpToNext(m.level)*100);});
 function rows(value:any):any[]{return Array.isArray(value)?value:value?.items??value?.entries??value?.rows??[];}
-async function run(fn:()=>Promise<unknown>,success?:string){if(busy.value)return;busy.value=true;error.value='';try{await fn();if(success)emit('toast',success);await session.refresh();}catch(e){error.value=(e as Error).message;}finally{busy.value=false;}}
+async function run(fn:()=>Promise<unknown>,success?:string){if(busy.value)return;busy.value=true;error.value='';try{await fn();if(success)emit('toast',success);await session.refresh();}catch(e){error.value=(e as Error).message;await session.refresh().catch(()=>undefined);}finally{busy.value=false;}}
 function preview(){emit('preview',JSON.parse(JSON.stringify(draft.value)));}
 function choose(p:typeof props.presets[number]){draft.value={...draft.value,presetId:p.id,bodyColor:p.color};preview();}
 async function load(){
+  const revision=++loadRevision,requestedPanel=props.panel;
+  const current=()=>!disposed&&revision===loadRevision&&requestedPanel===props.panel;
   loading.value=true;error.value='';purchase.value=null;
   try{
-    if(props.panel==='create'){draft.value={...draft.value,equipped:{},skinAssetId:null,patternId:'none',version:1};nickname.value='';preview();}
-    if(props.panel==='fish'||props.panel==='shop'){
+    if(requestedPanel==='create'){draft.value={...draft.value,equipped:{},skinAssetId:null,patternId:'none',version:1};nickname.value='';preview();}
+    if(requestedPanel==='fish'||requestedPanel==='shop'){
       if(session.me?.appearance)draft.value=JSON.parse(JSON.stringify(session.me.appearance));nickname.value=session.me?.nickname??'';
-      if(props.panel==='fish')await loadSkins(true);
+      if(requestedPanel==='fish')await loadSkins(true);
     }
-    if(props.panel==='shop'){
+    if(requestedPanel==='shop'){
       const [catalog,wardrobe]=await Promise.all([api<any>('/shop/items'),api<any>('/inventory')]);
+      if(!current())return;
       shopItems.value=rows(catalog);inventory.value=rows(wardrobe).map(i=>typeof i==='string'?i:i.itemId??i.item_id??i.id);
     }
-    if(props.panel==='rank'){const r=await api<any>(rankUrl());ranking.value=rows(r);rankMeta.value={myRank:r.myRank,nextCursor:r.nextCursor};}
-    if(props.panel==='guild'){
+    if(requestedPanel==='rank'){const r=await api<any>(rankUrl());if(!current())return;ranking.value=rows(r);rankMeta.value={myRank:r.myRank,nextCursor:r.nextCursor,nearby:r.nearby??[]};}
+    if(requestedPanel==='guild'){
       const [listed,tankPlayers,catalog]=await Promise.all([api<any>(guildListUrl()),api('/players'),api<any>('/shop/items?scope=GUILD&limit=100')]);
+      if(!current())return;
       guilds.value=rows(listed);guildNext.value=listed.nextCursor??null;players.value=rows(tankPlayers);guildShopItems.value=rows(catalog);
-      if(session.me?.guildId){guild.value=await api(`/guilds/${session.me.guildId}`);notice.value=guild.value.notice??'';guildName.value=guild.value.name;guildBadge.value=guild.value.badge;guildColor.value=guild.value.color;}
+      if(session.me?.guildId){const data=await api<any>(`/guilds/${session.me.guildId}`);if(!current())return;guild.value=data;notice.value=data.notice??'';guildName.value=data.name;guildBadge.value=data.badge;guildColor.value=data.color;}
       else guild.value=null;
     }
-  }catch(e){error.value=(e as Error).message;}finally{loading.value=false;}
+  }catch(e){if(current())error.value=(e as Error).message;}finally{if(current())loading.value=false;}
 }
 watch(()=>props.panel,load,{immediate:true});
 watch(rankKind,()=>{if(props.panel==='rank')void load();});
@@ -65,9 +72,9 @@ async function claimInvite(){await run(async()=>{await command('/auth/claim',{in
 async function feed(){await run(async()=>{await command('/tank/feed',{roomId:session.snapshot?.roomId,surfaceX:surfaceX.value,sceneEpoch:session.sceneEpoch});emit('close');},'鱼粮已投下，游过去看看！');}
 async function supply(){await run(async()=>{const r=await command<any>('/rewards/daily');emit('toast',r.replayed?'今日补给已经领取，本次没有重复发放':`今日补给到账：${r.actualXp??r.xp??0} 经验，${r.actualPower??r.power??0} 战力`);});}
 function rankUrl(cursor?:string){return `/leaderboards?kind=${['power','guest'].includes(rankKind.value)?'current':rankKind.value}&scope=${rankKind.value==='guest'?'guests':'members'}${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`;}
-async function moreRanks(){if(!rankMeta.value.nextCursor)return;await run(async()=>{const r=await api<any>(rankUrl(rankMeta.value.nextCursor!));ranking.value.push(...rows(r));rankMeta.value={myRank:r.myRank,nextCursor:r.nextCursor};});}
-function guildListUrl(cursor?:string){const search=guildSearch.value.trim()?`&search=${encodeURIComponent(guildSearch.value.trim())}`:'';return `/guilds?limit=20${search}${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`;}
-async function searchGuilds(){await run(async()=>{const result=await api<any>(guildListUrl());guilds.value=rows(result);guildNext.value=result.nextCursor??null;});}
+async function moreRanks(){if(!rankMeta.value.nextCursor)return;await run(async()=>{const r=await api<any>(rankUrl(rankMeta.value.nextCursor!));ranking.value.push(...rows(r));rankMeta.value={myRank:r.myRank,nextCursor:r.nextCursor,nearby:r.nearby??[]};});}
+function guildListUrl(cursor?:string){const search=appliedGuildSearch.value?`&search=${encodeURIComponent(appliedGuildSearch.value)}`:'';return `/guilds?limit=20${search}${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`;}
+async function searchGuilds(){await run(async()=>{appliedGuildSearch.value=guildSearch.value.trim();const result=await api<any>(guildListUrl());guilds.value=rows(result);guildNext.value=result.nextCursor??null;});}
 async function moreGuilds(){if(!guildNext.value)return;await run(async()=>{const result=await api<any>(guildListUrl(guildNext.value!));guilds.value.push(...rows(result));guildNext.value=result.nextCursor??null;});}
 async function loadLedger(reset=true){if(!guild.value)return;const cursor=reset?null:ledgerNext.value;if(!reset&&!cursor)return;await run(async()=>{const result=await api<any>(`/guilds/${guild.value.id}/ledger?limit=20${cursor?`&cursor=${encodeURIComponent(cursor)}`:''}`);if(reset)guild.value.ledger=rows(result);else guild.value.ledger=[...(guild.value.ledger??[]),...rows(result)];ledgerNext.value=result.nextCursor??null;});}
 async function guildAction(path:string,payload:unknown={},success='组织已更新',method='POST'){await run(async()=>{await command(path,payload,method);await session.refresh();await load();},success);}
@@ -125,7 +132,12 @@ async function confirmGuildAction(){
   </template>
 
   <template v-else-if="panel==='rank'">
-    <div class="eyebrow"><Crown :size="17"/>每次成长，都算数</div><h1>珊瑚海排行榜</h1><p class="panel-intro">战力来自真实成长与余额，购买后会即时变化。</p><div class="tabs"><button v-for="r in [{id:'power',name:'同事战力'},{id:'growth',name:'本周成长'},{id:'guild',name:'鱼群赛季'},{id:'guest',name:'游客榜'}]" :key="r.id" :class="{active:rankKind===r.id}" @click="rankKind=r.id">{{r.name}}</button></div><ol class="ranking-list"><li v-for="(entry,index) in ranking" :key="entry.userId??entry.id"><span class="rank-number">{{entry.rank??index+1}}</span><Fish :size="23"/><b>{{entry.nickname??entry.name}}</b><strong>{{rankKind==='growth'?entry.value:rankKind==='guild'?entry.points:entry.totalPower}}</strong></li></ol><p class="tiny-label">{{rankMeta.myRank?`我的名次：第${rankMeta.myRank}名`:'我尚未进入当前榜单'}}</p><button v-if="rankMeta.nextCursor" class="text-button" @click="moreRanks" :disabled="busy">加载更多</button><div v-if="!loading&&!ranking.length" class="empty-panel"><Trophy :size="46"/><h3>这里还很安静</h3><p>符合条件的玩家成长后，就会出现在这里。</p></div>
+    <div class="eyebrow"><Crown :size="17"/>每次成长，都算数</div><h1>珊瑚海排行榜</h1><p class="panel-intro">战力来自真实成长与余额，购买后会即时变化。</p>
+    <div class="tabs"><button v-for="r in [{id:'power',name:'同事战力'},{id:'growth',name:'本周成长'},{id:'guild',name:'鱼群赛季'},{id:'guest',name:'游客榜'}]" :key="r.id" :class="{active:rankKind===r.id}" :disabled="busy" @click="rankKind=r.id">{{r.name}}</button></div>
+    <ol class="ranking-list"><li v-for="(entry,index) in ranking" :key="entry.userId??entry.id"><span class="rank-number">{{entry.rank??index+1}}</span><Fish :size="23"/><b>{{entry.nickname??entry.name}}</b><strong>{{rankKind==='growth'?entry.value:rankKind==='guild'?entry.points:entry.totalPower}}</strong></li></ol>
+    <p class="tiny-label">{{rankMeta.myRank?`我的名次：第${rankMeta.myRank}名`:'我尚未进入当前榜单'}}</p>
+    <details v-if="rankMeta.nearby.length" class="bind-section"><summary>看看我附近的排名</summary><ol class="ranking-list"><li v-for="entry in rankMeta.nearby" :key="entry.userId??entry.id"><span class="rank-number">{{entry.rank}}</span><Fish :size="23"/><b>{{entry.nickname??entry.name}}{{(rankKind==='guild'?(entry.guildId??entry.id)===session.me?.guildId:entry.userId===session.me?.userId)?'（我）':''}}</b><strong>{{rankKind==='growth'?entry.value:rankKind==='guild'?entry.points:entry.totalPower}}</strong></li></ol></details>
+    <button v-if="rankMeta.nextCursor" class="text-button" @click="moreRanks" :disabled="busy">加载更多</button><div v-if="!loading&&!ranking.length" class="empty-panel"><Trophy :size="46"/><h3>这里还很安静</h3><p>符合条件的玩家成长后，就会出现在这里。</p></div>
   </template>
 
   <template v-else-if="panel==='guild'">

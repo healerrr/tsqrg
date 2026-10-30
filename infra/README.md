@@ -38,6 +38,8 @@ Docker 生产配置未在当前无 Docker 的 Windows 环境执行；不能仅�
 
 日志保留 requestId、userId、matchId、错误码、操作来源、状态码和耗时，隐藏 Cookie、邀请码明文和密钥。`Authorization: Bearer $OPS_METRICS_TOKEN` 可读取 `/metrics` 的 Prometheus 文本；`pnpm ops:monitor -- --seconds 1800 --interval 5` 可保存趋势报告。至少持续监测 HTTP 请求/错误、tick P95、连接数、内存、失败购买、冻结总额、待结算比赛年龄、outbox 积压和数据库连接池。公共缸负载烟测为 `pnpm load:smoke`，其报告明确记录尚未覆盖的性能目标。
 
+数据库断连时，存活接口仍返回进程存活，readiness 返回 503。令牌监控保留进程内存、连接和 tick，`aquarium_database_available=0`；不可读取的数据库指标使用 Prometheus `NaN`，不能当成冻结或待结算为零。收到此状态时资产写入也会暂停。
+
 发布前备份数据库和上传目录。先停止接新邀请与准备，短比赛有界排空；剩余比赛由服务器系统中止并退款。`stop_grace_period` 设为 45 秒。重启后必须先恢复未完成比赛，已提交的最终结果不再退款。不要直接删除 wallet_holds 或修改余额来清除准备状态。
 
 ## 备份与恢复演练
@@ -60,4 +62,28 @@ pnpm ops:restore -- --backup 'D:\aquarium\backups\aquarium-...' --database aquar
 恢复完成后脚本会重新核对行数、钱包/上传指纹和基础账目不变量，并写出恢复报告。随后使用新环境密钥启动该隔离实例、等待 readiness，并进行人工抽查；绝不能把恢复目标指向生产现库。
 
 本文件提供演练步骤；没有实际执行演练的记录前，OPS05 状态为未执行。
+
+### Compose 内的一次性备份与每日调度
+
+生产 Compose 另外提供 `operations` profile 的 `backup` 服务，镜像自带 Node.js 24 和 PostgreSQL 17 客户端。它通过内部网络读取数据库，以只读方式挂载现有上传卷，备份写入独立的 `backups` 持久卷，不需要在宿主机公开数据库端口。
+
+```sh
+docker compose --env-file .env -f infra/compose.yml --profile operations build backup
+docker compose --env-file .env -f infra/compose.yml --profile operations run --rm backup
+```
+
+正常 `up -d` 不会启动此 profile。单次成功会打印备份目录，例如 `/backups/aquarium-...`，只有包含完整 `manifest.json` 的目录才是可恢复备份。本模板不自动删除旧文件，至少保留最近七份；应定期把备份卷复制到另一台机器或离线存储。
+
+Linux 服务器可使用 `infra/systemd/aquarium-backup.service` 与 `.timer`：将项目放在 `/opt/aquarium`（或先调整单元中的绝对路径），准备受限权限的生产 `.env`，先构建备份镜像，再安装并启用这两个单元。
+
+```sh
+sudo install -m 0644 infra/systemd/aquarium-backup.service infra/systemd/aquarium-backup.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now aquarium-backup.timer
+sudo systemctl start aquarium-backup.service
+sudo journalctl -u aquarium-backup.service --no-pager
+sudo systemctl list-timers aquarium-backup.timer
+```
+
+调度时间为上海时间每日 02:30，最多随机延后十分钟；关机错过后会补跑。它只运行临时备份客户端，不会扩容游戏实例。失败日志进入 systemd journal；请接入公司的告警系统。以上 Docker 镜像与 Linux 定时单元尚未在当前 Windows 环境实跑，统一部署验收时必须记录实际启动、产物校验和恢复结果。
 

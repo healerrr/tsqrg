@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily aquarium backup at Shanghai business time
+
+[Timer]
+OnCalendar=*-*-* 02:30:00 Asia/Shanghai
+Persistent=true
+RandomizedDelaySec=10min
+Unit=aquarium-backup.service
+
+[Install]
+WantedBy=timers.target

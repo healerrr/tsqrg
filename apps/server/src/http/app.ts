@@ -51,6 +51,9 @@ export async function createApp() {
   const mutationBuckets = new Map<string, { second: number; count: number }>();
   let failedPurchaseCount = 0, httpRequestsTotal = 0, httpErrorResponsesTotal = 0;
   app.addHook('onRequest', async request => {
+    const routePath=request.url.split('?')[0];
+    // Liveness and bearer-authenticated telemetry must remain observable during a database outage.
+    if(request.method==='GET'&&['/health/live','/health/ready','/api/v1/health/live','/api/v1/health/ready','/metrics'].includes(routePath))return;
     if (request.method !== 'GET' && request.method !== 'HEAD' && request.method !== 'OPTIONS' && request.headers.origin) {
       assert(origins.includes(request.headers.origin), 'AUTH_REQUIRED', '请求来源不受信任', 403);
     }
@@ -116,6 +119,11 @@ export async function createApp() {
 
   const runtimeOverview = async () => {
     const times = [...world.tickTimes].sort((a, b) => a - b);
+    const database = await databaseMetrics().catch(error => {
+      pauseAssetWrites('database', '监控采集发现数据库不可用'); setReady(false);
+      app.log.warn({ err: error }, '数据库指标暂不可读，继续返回进程与连接指标');
+      return null;
+    });
     return {
       instanceId: ownerEpoch,
       uptimeSeconds: process.uptime(),
@@ -129,7 +137,8 @@ export async function createApp() {
       httpErrorResponsesTotal,
       socketConnectionsTotal,
       socketDisconnectsTotal,
-      database: await databaseMetrics(),
+      databaseAvailable: database !== null,
+      database,
     };
   };
 
@@ -214,11 +223,15 @@ export async function createApp() {
     const expected = Buffer.from(metricsToken), actual = Buffer.from(supplied);
     assert(expected.length > 0 && expected.length === actual.length && timingSafeEqual(expected, actual), 'AUTH_REQUIRED', '监控凭据无效', 401);
     const overview = await runtimeOverview();
-    const db = overview.database as Awaited<ReturnType<typeof databaseMetrics>>;
+    const db = overview.database;
     const lines = [
       '# HELP aquarium_connections Current Socket.IO connections',
       '# TYPE aquarium_connections gauge',
       `aquarium_connections ${overview.connections}`,
+      '# TYPE aquarium_database_available gauge',
+      `aquarium_database_available ${overview.databaseAvailable ? 1 : 0}`,
+      '# TYPE aquarium_ready gauge',
+      `aquarium_ready ${ready ? 1 : 0}`,
       '# TYPE aquarium_tick_p95_ms gauge',
       `aquarium_tick_p95_ms ${overview.tickP95Ms}`,
       '# TYPE aquarium_process_resident_memory_bytes gauge',
@@ -234,19 +247,19 @@ export async function createApp() {
       '# TYPE aquarium_socket_disconnects_total counter',
       `aquarium_socket_disconnects_total ${overview.socketDisconnectsTotal}`,
       '# TYPE aquarium_frozen_power gauge',
-      `aquarium_frozen_power ${db.held_power}`,
+      `aquarium_frozen_power ${db?.held_power ?? 'NaN'}`,
       '# TYPE aquarium_active_matches gauge',
-      `aquarium_active_matches ${db.active_matches}`,
+      `aquarium_active_matches ${db?.active_matches ?? 'NaN'}`,
       '# TYPE aquarium_pending_settlements gauge',
-      `aquarium_pending_settlements ${db.pending_settlements}`,
+      `aquarium_pending_settlements ${db?.pending_settlements ?? 'NaN'}`,
       '# TYPE aquarium_oldest_settlement_seconds gauge',
-      `aquarium_oldest_settlement_seconds ${db.oldest_settlement_seconds}`,
+      `aquarium_oldest_settlement_seconds ${db?.oldest_settlement_seconds ?? 'NaN'}`,
       '# TYPE aquarium_outbox_pending gauge',
-      `aquarium_outbox_pending ${db.outbox_pending}`,
+      `aquarium_outbox_pending ${db?.outbox_pending ?? 'NaN'}`,
       '# TYPE aquarium_oldest_outbox_seconds gauge',
-      `aquarium_oldest_outbox_seconds ${db.oldest_outbox_seconds}`,
+      `aquarium_oldest_outbox_seconds ${db?.oldest_outbox_seconds ?? 'NaN'}`,
       '# TYPE aquarium_db_pool_waiting gauge',
-      `aquarium_db_pool_waiting ${db.pool.waiting}`,
+      `aquarium_db_pool_waiting ${pool.waitingCount}`,
       '',
     ];
     reply.type('text/plain; version=0.0.4; charset=utf-8');

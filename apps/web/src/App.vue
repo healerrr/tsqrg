@@ -60,12 +60,12 @@ function previewItem(item:typeof items[number]){appearance.value={...appearance.
 function dash(){aquarium?.triggerAction('dash');if(isPreview)sound.play('dash');}
 function reloadPage(){window.location.reload();}
 watch(appearance,v=>aquarium?.setAppearancePreview(v),{deep:true});
-watch(panel,v=>{aquarium?.setInputEnabled(!v&&(isPreview||session.controlled));if(!v&&!isPreview)aquarium?.setAppearancePreview(null);});
+watch(panel,v=>{aquarium?.setInputEnabled(!v&&(isPreview||session.controlled));if(!v&&!isPreview){if(session.me?.appearance)appearance.value=structuredClone(session.me.appearance);aquarium?.setAppearancePreview(null);}});
 watch(panel,async(value,old)=>{if(value&&!old)previousFocus=document.activeElement as HTMLElement;if(value){await nextTick();dialog.value?.focus();}else previousFocus?.focus();});
 watch(()=>session.controlled,v=>{aquarium?.setInputEnabled(!panel.value&&v);if(!v)aquarium?.resetPrediction();});
 watch(()=>session.status,v=>{if(v!=='online'&&!isPreview)aquarium?.resetPrediction();});
 watch(()=>session.status,v=>{if(v==='online'){void refreshBoard();if(!boardTimer)boardTimer=setInterval(()=>void refreshBoard(),5000);}});
-watch(()=>session.me,v=>{if(v?.appearance){appearance.value=structuredClone(v.appearance);}if(v&&!v.fishId&&!isPreview)panel.value='create';});
+watch(()=>session.me,v=>{if(v?.appearance&&!['fish','shop','create'].includes(panel.value)){appearance.value=structuredClone(v.appearance);}if(v&&!v.fishId&&!isPreview)panel.value='create';});
 watch(()=>session.me?.currentMatchId,(id,old)=>{if(id&&id!==old&&session.snapshot?.sceneKind==='TANK'){panel.value='arena';toast('收到一场对决邀请，请查看并独立确认');}});
 watch(()=>session.snapshot?.match?.phase,phase=>{if(phase==='FINISHED'||phase==='ABORTED'){panel.value='arena';toast(phase==='FINISHED'?'比赛已结算，可查看真实战力变化':'比赛已中止，冻结战力已经释放');}});
 watch(reduced,v=>{aquarium?.setReducedMotion(v);localStorage.setItem('tank.reduced',String(v));});
