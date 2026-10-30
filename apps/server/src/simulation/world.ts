@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto';
 import type { Server, Socket } from 'socket.io';
-import { config, displaySize, softSeparation, stepMovement } from '@aquarium/core';
+import { config, displaySize, randomOfflineWander, softSeparation, stepMovement, type OfflineWanderPlan } from '@aquarium/core';
 import type { FishSnapshot, InputFrame, MoveIntent, SceneSnapshot, SelfView, Vec2 } from '@aquarium/protocol';
 import { claimControlSchema, emoteSchema, followSchema, helloSchema, inputFrameSchema, joinSceneSchema } from '@aquarium/protocol';
 import { selfView } from '../services/identity';
 import { AppError, assert } from '../http/errors';
 import { guildMarkForUser } from '../services/guilds';
-import { loadTankLocation, saveTankLocations } from '../services/presence';
+import { fishOwners, loadTankLocation, saveTankLocations } from '../services/presence';
 
 export interface PlayerRuntime {
   self: SelfView; fish: FishSnapshot; roomId: string; controlSocketId: string | null;
@@ -38,10 +38,39 @@ export class World {
   emptyRoomSince = new Map<string, number>();
   private dirtyTankLocations = new Map<string, string>();
   private locationWrite: Promise<void> | null = null;
+  private offlinePlans = new Map<string, OfflineWanderPlan>();
   private timer: ReturnType<typeof setInterval> | null = null;
   private snapshotTimer: ReturnType<typeof setInterval> | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   constructor(public io: Server) {}
+  async restoreOfflinePlayers() {
+    if (!config.tank.offlineRoaming.enabled) return;
+    const userIds = await fishOwners();
+    for (let offset = 0; offset < userIds.length; offset += 8) await Promise.all(userIds.slice(offset, offset + 8).map(userId => this.refreshPlayer(userId)));
+    await this.flushTankLocations();
+  }
+  isOfflineRoaming(player: PlayerRuntime) {
+    return config.tank.offlineRoaming.enabled && player.disconnectedAt !== null && !player.self.currentMatchId && player.roomId.startsWith('tank:')
+      && ![...this.connections.values()].some(connection => connection.userId === player.self.userId && connection.socket.connected);
+  }
+  private placeOfflinePlayer(player: PlayerRuntime) {
+    if (player.disconnectedAt === null || player.self.currentMatchId || !player.roomId.startsWith('tank:')) return;
+    const count = (roomId: string) => [...this.players.values()].filter(other => other !== player && other.roomId === roomId && other.disconnectedAt !== null && !other.self.currentMatchId).length;
+    if (count(player.roomId) < config.tank.maxIdleDisplays) return;
+    let room = [...this.roomEpochs.keys()].find(id => id.startsWith('tank:') && count(id) < config.tank.maxIdleDisplays);
+    if (!room) { let number = 1; while (this.roomEpochs.has(`tank:${number}`)) number++; room = `tank:${number}`; this.roomEpochs.set(room, randomUUID()); }
+    player.roomId = room; this.disableFollow(player); this.offlinePlans.delete(player.self.userId); this.rememberTankLocation(player);
+  }
+  private beginOffline(player: PlayerRuntime) {
+    if (player.self.currentMatchId || !player.roomId.startsWith('tank:')) return;
+    player.input = { kind: 'idle' }; player.fish.velocity = { x: 0, y: 0 }; player.dashUntil = 0; player.shieldUntil = 0;
+    this.disableFollow(player); this.offlinePlans.delete(player.self.userId); this.placeOfflinePlayer(player);
+  }
+  private offlineMove(player: PlayerRuntime, now: number): MoveIntent {
+    let plan = this.offlinePlans.get(player.self.userId);
+    if (!plan || now >= plan.until) { plan = randomOfflineWander(now); this.offlinePlans.set(player.self.userId, plan); }
+    return plan.move;
+  }
   start() {
     const dt = 1 / config.network.serverTickHz;
     this.timer = setInterval(() => this.step(dt), 1000 / config.network.serverTickHz);
@@ -52,19 +81,14 @@ export class World {
   maintainPresence(now = Date.now()) {
     void this.flushTankLocations();
     for (const p of this.players.values()) if (p.controlSocketId && this.connections.get(p.controlSocketId)?.socket.connected) p.leaseUntil = now + config.network.controlLeaseTtlMs;
-    const connectedUsers = new Set([...this.connections.values()].filter(connection => connection.socket.connected).map(connection => connection.userId));
     for (const roomId of [...this.roomEpochs.keys()]) {
-      const idle = [...this.players.entries()].filter(([userId, p]) => p.roomId === roomId && p.disconnectedAt !== null && !p.self.currentMatchId && !connectedUsers.has(userId))
-        .sort((a, b) => (b[1].disconnectedAt ?? 0) - (a[1].disconnectedAt ?? 0));
-      for (const [userId] of idle.slice(config.tank.maxIdleDisplays)) this.players.delete(userId);
+      for (const player of this.players.values()) if (player.roomId === roomId) this.placeOfflinePlayer(player);
 
       const hasConnection = [...this.connections.values()].some(connection => connection.socket.connected && this.players.get(connection.userId)?.roomId === roomId);
-      if (roomId === 'tank:1' || hasConnection || this.roomSize(roomId) > 0) { this.emptyRoomSince.delete(roomId); continue; }
+      if (roomId === 'tank:1' || hasConnection || [...this.players.values()].some(player => player.roomId === roomId)) { this.emptyRoomSince.delete(roomId); continue; }
       const emptySince = this.emptyRoomSince.get(roomId) ?? now;
       this.emptyRoomSince.set(roomId, emptySince);
       if (now - emptySince < config.tank.emptyRoomRetentionSeconds * 1000) continue;
-      for (const [userId, player] of this.players) if (player.roomId === roomId && !player.self.currentMatchId && !connectedUsers.has(userId)) this.players.delete(userId);
-      if ([...this.players.values()].some(player => player.roomId === roomId)) continue;
       this.roomEpochs.delete(roomId); this.emptyRoomSince.delete(roomId);
       for (const [key, group] of this.followGroups) if (group.roomId === roomId) this.followGroups.delete(key);
     }
@@ -110,10 +134,6 @@ export class World {
     if (old) {
       const previousGuildId = old.self.guildId;
       old.self = self;
-      if(old.disconnectedAt!==null&&old.roomId.startsWith('tank:')&&this.roomSize(old.roomId)>=config.tank.maxOnlinePlayers){
-        old.roomId=this.tankRoomFor(self.guildId,userId);
-        old.fish.position={x:400+Math.random()*1000,y:250+Math.random()*450};old.fish.velocity={x:0,y:0};old.input={kind:'idle'};this.disableFollow(old);
-      }
       // Persisted profile refreshes must not replace the match's locked appearance or level.
       if(old.roomId.startsWith('tank:')) { old.fish.nickname = self.nickname; old.fish.appearance = self.appearance; old.fish.level = self.level; old.fish.displaySize = displaySize(self.level); old.fish.guildId = self.guildId; old.fish.guildMark = guildMark; }
       if (!self.guildId || self.guildId !== previousGuildId) this.disableFollow(old);
@@ -124,7 +144,7 @@ export class World {
       appearance: self.appearance, level: self.level, displaySize: displaySize(self.level), guildId: self.guildId, guildMark, team: null, animation: 'idle', interactive: true, followGroupId: null, followLeaderFishId: null, hp: null, maxHp: null, shieldUntilServerMs: 0, respawnAtServerMs: null };
     const p: PlayerRuntime = { self, fish, roomId, controlSocketId: null, leaseUntil: 0, input: { kind: 'idle' }, lastInputAt: 0, lastActivityAt: 0, pageVisible: true, ackInputSeq: 0, ackActionSeq: 0,
       stamina: config.tank.staminaMax, dashUntil: 0, dashReadyAt: 0, shieldReadyAt: 0, shieldUntil: 0, dashDirection: { x: 1, y: 0 }, animationUntil: 0, disconnectedAt: Date.now(), follow: { enabled: false, since: 0 } };
-    this.players.set(userId, p); return p;
+    this.players.set(userId, p); this.placeOfflinePlayer(p); return p;
   }
   roomSize(roomId: string) { return [...this.players.values()].filter(p => p.roomId === roomId && p.disconnectedAt === null).length; }
   getConnectionFor(userId: string) { const p = this.players.get(userId); return p?.controlSocketId ? this.connections.get(p.controlSocketId) : undefined; }
@@ -187,6 +207,7 @@ export class World {
     socket.on('disconnect', () => {
       this.connections.delete(socket.id); const p = this.players.get(userId);
       if (p?.controlSocketId === socket.id) { p.input = { kind: 'idle' }; p.pageVisible = false; p.controlSocketId = null; p.disconnectedAt = Date.now(); this.battle?.disconnected(userId); }
+      if (p && this.isOfflineRoaming(p)) this.beginOffline(p);
     });
   }
   claim(c: ConnectionRuntime, p: PlayerRuntime) {
@@ -198,6 +219,7 @@ export class World {
       p.roomId = this.tankRoomFor(p.self.guildId, p.self.userId);
       p.input = { kind: 'idle' }; p.fish.velocity = { x: 0, y: 0 }; this.disableFollow(p);
     }
+    if (p.disconnectedAt !== null) { this.offlinePlans.delete(p.self.userId); p.fish.velocity = { x: 0, y: 0 }; p.fish.animation = 'idle'; p.dashUntil = 0; }
     const previous = p.controlSocketId ? this.connections.get(p.controlSocketId) : null;
     if (previous && previous.socket.id !== c.socket.id) { previous.sceneEpoch = randomUUID(); previous.socket.emit('control:changed', { controlled: false, controlledFishId: null, sceneEpoch: previous.sceneEpoch }); }
     p.controlSocketId = c.socket.id; p.leaseUntil = Date.now()+config.network.controlLeaseTtlMs; p.disconnectedAt = null;
@@ -307,14 +329,15 @@ export class World {
     for (const p of this.players.values()) {
       if (p.self.currentMatchId || !p.roomId.startsWith('tank:')) continue;
       if (!p.controlSocketId || p.leaseUntil < now || now-p.lastInputAt > 350 || !p.pageVisible) p.input = { kind: 'idle' };
-      const dash = now < p.dashUntil;
+      const offline = this.isOfflineRoaming(p);
+      const dash = !offline && now < p.dashUntil;
       const manualMove = p.input.kind !== 'idle';
-      const move = dash ? { kind: 'direction' as const, direction: p.dashDirection } : p.follow.enabled ? this.followMove(p, now) : p.input;
+      const move = offline ? this.offlineMove(p, now) : dash ? { kind: 'direction' as const, direction: p.dashDirection } : p.follow.enabled ? this.followMove(p, now) : p.input;
       if (dash) p.fish.velocity = { x: p.dashDirection.x*config.battle.dashSpeed, y: p.dashDirection.y*config.battle.dashSpeed };
       const group = this.followGroup(p), leader = group?.leaderFishId === p.fish.id;
       const distanceToTarget = move.kind === 'target' ? Math.hypot(move.target.x - p.fish.position.x, move.target.y - p.fish.position.y) : 0;
       const followSpeed = p.follow.enabled && !leader && distanceToTarget > config.guild.formationRadius * 1.5 ? config.tank.moveSpeed * config.guild.followCatchupMultiplier : config.tank.moveSpeed;
-      const next = stepMovement(p.fish, move, dt, { speed: dash ? config.battle.dashSpeed : followSpeed, bounds: config.tank.swimBounds, bodyRadius: config.tank.playerBodyRadius });
+      const next = stepMovement(p.fish, move, dt, { speed: offline ? config.tank.offlineRoaming.moveSpeed : dash ? config.battle.dashSpeed : followSpeed, bounds: config.tank.swimBounds, bodyRadius: config.tank.playerBodyRadius });
       p.fish.position = next.position; p.fish.velocity = next.velocity;
       if (leader && manualMove && group) group.rally = { ...next.position };
       if (Math.abs(next.velocity.x)>2) p.fish.facing = next.velocity.x<0 ? 'left' : 'right';
@@ -331,9 +354,9 @@ export class World {
     const battle = this.battle?.snapshot(p,c); if (battle) return battle;
     const controlled = p.controlSocketId === c.socket.id && p.leaseUntil>=Date.now();
     const visible = [...this.players.values()].filter(other => other.roomId===p.roomId && !other.self.currentMatchId);
-    const online = visible.filter(other => other.disconnectedAt===null), offline = visible.filter(other => other.disconnectedAt!==null).slice(-config.tank.maxIdleDisplays);
+    const online = visible.filter(other => other.disconnectedAt===null), offline = visible.filter(other => other.disconnectedAt!==null);
     return { protocolVersion: 1, snapshotKind: 'full', rulesVersion: config.rulesVersion, roomId: p.roomId, roomEpoch: this.roomEpochs.get(p.roomId)!, sceneEpoch: c.sceneEpoch, sceneKind: 'TANK', serverTick: this.serverTick, serverTimeMs: Date.now(), ackInputSeq: p.ackInputSeq, ackActionSeq: p.ackActionSeq,
-      controlledFishId: controlled ? p.fish.id : null, fish: [...online,...offline].map(other => ({...other.fish,interactive:other.disconnectedAt===null})),
+      controlledFishId: controlled ? p.fish.id : null, fish: [...online,...offline].map(other => ({...other.fish,interactive:other.disconnectedAt===null,offlineRoaming:this.isOfflineRoaming(other)})),
       food: this.ecosystem?.snapshot(p.roomId).food ?? [], npc: this.ecosystem?.snapshot(p.roomId).npc ?? [], pearl: null, match: null,
       ownRuntime: controlled ? { stamina: p.stamina, dashReadyAtServerMs: p.dashReadyAt, shieldReadyAtServerMs: p.shieldReadyAt } : null };
   }

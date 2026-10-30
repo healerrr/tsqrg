@@ -132,3 +132,13 @@
 - 数据库断连时，健康接口不再先验证 Cookie，进程存活可继续返回 200、readiness 返回 503；令牌鉴权的 Prometheus 仍输出内存/连接/tick，额外输出数据库可用与 readiness 标记，缺失数据库值为 `NaN`，并关闭资产写入。新增 HTTP 注入检查 1/1 通过，数据库调用使用失败替身；真实断库/恢复仍待 M8 验收。
 - 生产配置补独立 `operations` 备份镜像与 Compose profile：内置 PostgreSQL17 客户端、只读挂载生产上传卷、独立备份持久卷，普通部署不会自动运行该 profile；提供每日上海时间 02:30 的 Linux systemd 单元模板和实际命令说明。`.env.example` 补齐 Compose 所需的 `POSTGRES_PASSWORD`。未在本机安装或启用定时任务，未运行 Docker 构建、备份或恢复演练；只实际完成 YAML 解析及 profile/卷隔离字段核对。
 - 本批最终轻量检查：`pnpm test` 58/58、Server/Web 类型检查、相关 Server/检查脚本 ESLint、`git diff --check` 和完整 `pnpm build` 通过。构建首次在沙箱内因 esbuild 祖先目录读取权限失败，经提升权限重跑后完整成功；主业务 JS 239.69 kB，Pixi chunk 532.73 kB，后者仍有非阻断体积警告。M7/M8 数据库、六独立浏览器、混合负载、耐久与部署恢复检查继续后置。
+
+### 离线随机巡游与偶遇进食（2026-10-30）
+
+- 按本次要求实现：账号所有 Socket 连接断开、未准备或参加比赛时，由服务器随机选择游动目标和停留时间；不读取食物或 NPC 位置、不追逐、不自动冲刺。实际碰撞且体型允许时才进食，没有碰到就没有收益，不保证每条鱼都能吃到。重新上线立即停止托管并恢复本人控制。
+- 离线奖励沿用既有唯一来源与数据库事务，和在线进食、每日补给共用每天 300 XP / 80 战力额度；不新增离线保底或独立额度。规则版本升为 `1.1.0`，协议版本仍为 1，快照增加可选 `offlineRoaming`，界面显示“离线巡游”。
+- 启动从数据库恢复全部角色；每缸最多 12 条离线托管鱼，超额自动分缸而非删除。有离线鱼的房间持续模拟生态和随机投食。仅在服务器运行期间实时模拟，停机时间不补算收益；仍有观察连接、隐藏页面或在线挂机不会叠加离线收益。
+- 实际通过：`pnpm test` 61/61、完整 `pnpm typecheck`（Protocol/Core/Server/Web）、改动相关 TypeScript ESLint 和 `git diff --check`。Vue 文件由 `vue-tsc` 检查，本轮未重跑生产构建或浏览器视觉验收。
+- 真实 PostgreSQL 验证命令：显式设置本地 `DATABASE_URL=postgresql://aquarium:aquarium_dev@127.0.0.1:5540/aquarium` 后，执行 `node --import tsx tests/integration/offline.ts`，9 组通过。脚本自动创建、迁移并种子化隔离库 `aquarium_offline_a7a8a67a0e16`，验证 14 鱼恢复分缸、不追食/未碰撞不奖励、离线鱼粮与 NPC 实际入账、在线离线争食唯一、十次重试不增发、日末截断、体型限制、观察/比赛资格、真实独立 Socket.IO 上下线接管，以及持久化和全库流水守恒。证据：`artifacts/offline/integration-results.json`；隔离库保留供核对，未修改现有游戏账号。
+- 在上述隔离库继续执行 `node --import tsx tests/integration/m3.ts`，原有生态成长回归 11 组通过。以上是服务端及真实 Socket 集成验证，不等于浏览器画面验收，也不代表 M7/M8 封板。
+- 本机真实游戏已运行新逻辑：Web `http://127.0.0.1:5173/`，API 3000，PostgreSQL 17 实际端口 5540（默认 55432 在本机落入 Windows 保留范围）。保留原 `.runtime/postgres` 数据，API 启动恢复角色后，经 Web 代理请求 `/api/v1/health/ready` 实际返回 HTTP 200、`database=true`、`rulesVersion=1.1.0`。后端日志 `.runtime/server-20261030-133159.out.log` 和对应 `.err.log`；本轮未执行浏览器离线标签截图、长期负载或性能验收。

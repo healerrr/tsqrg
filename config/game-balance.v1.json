@@ -1,5 +1,5 @@
 {
-  "rulesVersion": "1.0.0",
+  "rulesVersion": "1.1.0",
   "protocolVersion": 1,
   "timeZone": "Asia/Shanghai",
   "fish": {
@@ -38,6 +38,15 @@
     "maxOnlinePlayers": 40,
     "maxIdleDisplays": 12,
     "emptyRoomRetentionSeconds": 300,
+    "offlineRoaming": {
+      "enabled": true,
+      "moveSpeed": 70,
+      "legMinSeconds": 3,
+      "legMaxSeconds": 8,
+      "pauseChance": 0.18,
+      "pauseMinSeconds": 0.5,
+      "pauseMaxSeconds": 2
+    },
     "maxNpc": 12,
     "npcTargetSilver": 8,
     "npcTargetAgile": 3,

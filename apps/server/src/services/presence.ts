@@ -1,5 +1,10 @@
 import { pool } from '../persistence/db';
 
+export async function fishOwners(): Promise<string[]> {
+  const result = await pool.query('SELECT user_id FROM fish ORDER BY created_at,id');
+  return result.rows.map(row => row.user_id as string);
+}
+
 /** Server-assigned room preference only; never accepts a client-supplied room. */
 export async function loadTankLocation(userId: string): Promise<string | null> {
   const result = await pool.query('SELECT last_tank_room_id FROM fish WHERE user_id=$1', [userId]);

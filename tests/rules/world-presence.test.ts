@@ -1,11 +1,12 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { config } from '../../packages/game-core/src/index';
 import type { Appearance, FishSnapshot, SelfView } from '../../packages/protocol/src/index';
 import { World, type ConnectionRuntime, type PlayerRuntime } from '../../apps/server/src/simulation/world';
 import { saveTankLocations } from '../../apps/server/src/services/presence';
 
-vi.mock('../../apps/server/src/services/presence', () => ({ loadTankLocation: vi.fn().mockResolvedValue(null), saveTankLocations: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../../apps/server/src/services/presence', () => ({ fishOwners: vi.fn().mockResolvedValue([]), loadTankLocation: vi.fn().mockResolvedValue(null), saveTankLocations: vi.fn().mockResolvedValue(undefined) }));
 beforeEach(() => { vi.clearAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); });
 
 const appearance: Appearance = {
   presetId: 'goldfish', bodyColor: '#ffb84c', finColor: '#4c9cec', patternId: 'none', skinAssetId: null, equipped: {}, version: 1,
@@ -37,7 +38,7 @@ function observer(userId: string): ConnectionRuntime {
 }
 
 describe('公共缸运行时维护', () => {
-  it('保留仍有观察连接的玩家，并在宽限后释放真正空闲的分缸', () => {
+  it('离线鱼超出容量后分缸继续托管，只有真正空缸才在宽限后释放', () => {
     const world = new World({} as ConstructorParameters<typeof World>[0]);
     world.roomEpochs.set('tank:2', 'room-two');
     const now = 100_000;
@@ -48,13 +49,18 @@ describe('公共缸运行时维护', () => {
     world.maintainPresence(now);
 
     expect(world.players.has('observer')).toBe(true);
-    expect([...world.players.values()].filter(value => value.roomId === 'tank:2')).toHaveLength(config.tank.maxIdleDisplays + 1);
+    expect(world.players.size).toBe(15);
+    expect([...world.players.values()].filter(value => value.roomId === 'tank:2').length).toBeLessThanOrEqual(config.tank.maxIdleDisplays);
     expect(world.emptyRoomSince.has('tank:2')).toBe(false);
 
     world.connections.clear();
     world.maintainPresence(now + 1);
     world.maintainPresence(now + 2 + config.tank.emptyRoomRetentionSeconds * 1000);
-
+    expect(world.roomEpochs.has('tank:2')).toBe(true);
+    expect(world.players.size).toBe(15);
+    for (const [id, runtime] of world.players) if (runtime.roomId === 'tank:2') world.players.delete(id);
+    world.maintainPresence(now + 3 + config.tank.emptyRoomRetentionSeconds * 1000);
+    world.maintainPresence(now + 4 + config.tank.emptyRoomRetentionSeconds * 2000);
     expect(world.roomEpochs.has('tank:2')).toBe(false);
     expect([...world.players.values()].some(value => value.roomId === 'tank:2')).toBe(false);
   });
@@ -108,5 +114,22 @@ describe('公共缸运行时维护', () => {
     runtime.roomId = 'tank:2'; world.rememberTankLocation(runtime);
     const flushing = world.flushTankLocations(); completeFirst(); await flushing;
     expect(vi.mocked(saveTankLocations).mock.calls.map(([locations]) => locations)).toEqual([[['moving', 'tank:1']], [['moving', 'tank:2']]]);
+  });
+
+  it('离线随机游动，观察连接暂停托管；重新接管后不残留随机移动', () => {
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const world = new World({} as ConstructorParameters<typeof World>[0]), runtime = player('offline', 'tank:1', 1);
+    world.players.set('offline', runtime);
+    expect(world.isOfflineRoaming(runtime)).toBe(true);
+    world.step(1 / 30); expect(runtime.fish.position.x).toBeGreaterThan(400);
+    const connection = observer('offline'); Object.assign(connection.socket, { id: 'returned', emit: vi.fn() });
+    world.connections.set('returned', connection);
+    expect(world.isOfflineRoaming(runtime)).toBe(false);
+    world.claim(connection, runtime);
+    const position = { ...runtime.fish.position }; world.step(1 / 30);
+    expect(runtime.fish.position).toEqual(position);
+    expect(runtime.fish.velocity).toEqual({ x: 0, y: 0 });
+    runtime.self.currentMatchId = 'locked-match'; runtime.disconnectedAt = 1; world.connections.clear();
+    expect(world.isOfflineRoaming(runtime)).toBe(false);
   });
 });

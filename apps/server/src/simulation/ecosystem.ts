@@ -55,7 +55,7 @@ export class Ecosystem {
     this.loadedBatches.set(batchId,Math.max(0,...pellets.map(pellet=>pellet.expiresAtServerMs)));
   }
   private roomFoodCount(roomId:string){return [...this.food.values()].filter(e=>e.roomId===roomId).length;}
-  private active(p:PlayerRuntime,now:number){return !p.self.currentMatchId&&isActiveForRewards({connected:p.disconnectedAt===null,controlled:!!p.controlSocketId&&p.leaseUntil>=now,pageVisible:p.pageVisible,lastActivityMs:p.lastActivityAt,nowMs:now});}
+  private active(p:PlayerRuntime,now:number){return !p.self.currentMatchId&&(this.world.isOfflineRoaming(p)||isActiveForRewards({connected:p.disconnectedAt===null,controlled:!!p.controlSocketId&&p.leaseUntil>=now,pageVisible:p.pageVisible,lastActivityMs:p.lastActivityAt,nowMs:now}));}
   step(now:number,dt:number){
     for(const [id,expiresAt]of this.loadedBatches)if(expiresAt<=now)this.loadedBatches.delete(id);
     for(const [id,food]of this.food)if(!this.world.roomEpochs.has(food.roomId))this.food.delete(id);

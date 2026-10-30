@@ -1,13 +1,14 @@
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { readRuntimeConfig } from '../../apps/server/src/runtime-config';
+import { config } from '../../packages/game-core/src/index';
 
 function production(): NodeJS.ProcessEnv {
   return {
     NODE_ENV: 'production', HOST: '0.0.0.0', PORT: '3000',
     DATABASE_URL: 'postgresql://aquarium:test@db:5432/aquarium', APP_ORIGIN: 'https://fish.example.com',
     SESSION_SECRET: 'a'.repeat(32), OPS_METRICS_TOKEN: 'b'.repeat(24), UPLOAD_DIR: resolve('uploads'),
-    GAME_TIMEZONE: 'Asia/Shanghai', RULES_VERSION: '1.0.0', LOG_LEVEL: 'info',
+    GAME_TIMEZONE: 'Asia/Shanghai', RULES_VERSION: config.rulesVersion, LOG_LEVEL: 'info',
   };
 }
 

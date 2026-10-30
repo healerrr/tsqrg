@@ -337,6 +337,7 @@ export async function createApp() {
     await matches.recoverOldMatches();
     const initialReport = await reconcile();
     await enforceReconciliation(initialReport);
+    await world.restoreOfflinePlayers();
     resumeAssetWrites('database');
     matches.start(); world.start();
     outboxTimer = setInterval(() => { void drainOutbox(); }, 500);

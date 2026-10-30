@@ -349,7 +349,7 @@ export class FishView extends Container {
     this.visual.scale.set(this.facing * size * dash * eat, size / dash * eat);
     this.visual.rotation = reduced ? 0 : animation === 'defeat' ? 0.35 : animation === 'victory' ? Math.sin(time * 6) * 0.15 : Math.max(-0.15, Math.min(0.15, s.velocity.y / 900));
     const stateAlpha = animation === 'bubble' ? 0.5 : animation === 'hit' ? (Math.sin(time * 50) > 0 ? 0.6 : 1) : 1;
-    const presenceAlpha = !s.interactive && !inArena ? 0.48 : 1;
+    const presenceAlpha = !s.interactive && !inArena ? s.offlineRoaming ? 0.72 : 0.48 : 1;
     this.visual.alpha = stateAlpha * presenceAlpha;
     this.guildVisual.scale.copyFrom(this.visual.scale);
     this.guildVisual.rotation = this.visual.rotation;
@@ -358,6 +358,7 @@ export class FishView extends Container {
     this.nameTag.visible = this.own || this.chosen || !!s.team;
     this.nameTag.y = ((this.preset === 'angelfish' ? 87 : 65) + (this.hasCharm ? 20 : 0)) * size;
     this.presenceText.visible = !s.interactive && !inArena;
+    this.presenceText.text = s.offlineRoaming ? '离线巡游' : '离线展示';
     this.presenceText.y = this.nameTag.y + 24;
     this.badge.y = -67 * size;
     const aura = this.aura.clear();

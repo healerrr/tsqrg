@@ -76,7 +76,7 @@ export const fishSnapshotSchema = z.object({
   level: safeIntSchema.min(1).max(30), displaySize: z.number().finite().positive().max(10),
   guildId: idSchema.nullable(), team: z.enum(['A', 'B']).nullable(),
   animation: z.enum(['idle', 'swim', 'dash', 'eat', 'hit', 'victory', 'defeat', 'bubble']),
-  interactive: z.boolean(), followGroupId: idSchema.nullable(), hp: safeIntSchema.nullable(),
+  interactive: z.boolean(), offlineRoaming: z.boolean().optional(), followGroupId: idSchema.nullable(), hp: safeIntSchema.nullable(),
   followLeaderFishId: idSchema.nullable().optional(),
   guildMark: z.object({ id: idSchema, name: guildNameSchema, badge: z.string().max(12), color: colorSchema, bannerItemId: idSchema.nullable(), trailItemId: idSchema.nullable() }).strict().nullable().optional(),
   maxHp: safeIntSchema.nullable(), shieldUntilServerMs: safeIntSchema, respawnAtServerMs: safeIntSchema.nullable(),

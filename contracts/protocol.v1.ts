@@ -107,6 +107,8 @@ export interface FishSnapshot {
   team: 'A' | 'B' | null;
   animation: 'idle' | 'swim' | 'dash' | 'eat' | 'hit' | 'victory' | 'defeat' | 'bubble';
   interactive: boolean;
+  /** 无任何在线连接时的服务器随机托管；不代表可发起PK或代替玩家操作。 */
+  offlineRoaming?: boolean;
   followGroupId: Id | null;
   followLeaderFishId?: Id | null;
   guildMark?: GuildMark | null;
